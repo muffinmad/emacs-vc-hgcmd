@@ -1,4 +1,4 @@
-;;; vc-hgcmd.el --- VC backend to work with hg repositories through hg command server -*- lexical-binding: t; -*-
+;;; vc-hgcmd.el --- VC mercurial backend that uses hg command server -*- lexical-binding: t; -*-
 
 ;; Copyright (C) 2018 Andrii Kolomoiets
 
@@ -551,7 +551,7 @@ Insert 'Running command' and display buffer text if COMMAND"
   "Retrieve revision REV of FILE."
   (vc-hgcmd-find-revision file rev (or (get-file-buffer file) (current-buffer))))
 
-(defun vc-hg-revert (file &optional contents-done)
+(defun vc-hgcmd-revert (file &optional contents-done)
   "Refert FILE if not CONTENTS-DONE."
   (unless contents-done
     (vc-hgcmd-command "revert" file)))
