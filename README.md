@@ -62,3 +62,11 @@ If `vc-create-tag` is invoked with prefix argument then named branch will be cre
 
 While commiting merge changes commit message will be set to `merged <branch>` if
 different branch was merged or to `merged <node>`
+
+## Installation
+
+Download `vc-hgcmd.el` and run:
+
+<kbd>M-x</kbd> `package-install-file` <kbd>RET</kbd> `<path-to-vc-hgcmd-el>` <kbd>RET</kbd>
+
+Also you need to add `Hgcmd` to `vc-handled-backeds`.
