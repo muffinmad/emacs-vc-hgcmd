@@ -14,7 +14,7 @@ Because communicating with single `hg` process over pipe is much faster than sta
 
 #### File renames and short log
 
-`vc-hgcmd` can't show file renames in `vc-dir` and doesn't have short log version yet
+`vc-hgcmd` can't show file renames in `vc-dir` and doesn't have short log version yet.
 
 #### Unresolved conflict status for a file
 
@@ -27,7 +27,7 @@ Also you can use `vc-find-conflicted-file` to find next file with unresolved mer
 
 #### Current branch is displayed on mode line.
 
-It's not customizable yet.
+Mode-line format is not customizable yet.
 
 #### Amend and close branch commits
 
@@ -50,7 +50,7 @@ You can specify `-C` to run `hg update` with `-C` flag and discard all uncommite
 
 #### Filenames in `vc-annotate` buffer are hidden
 
-They are needed to annotate changes across renames but mostly useless in annotate buffer.
+They are needed to annotate changes across file renames but mostly useless in annotate buffer.
 `vc-hgcmd` removes it from annotate buffer but keep it in text properties.
 
 #### Create tag
@@ -61,7 +61,7 @@ If `vc-create-tag` is invoked with prefix argument then named branch will be cre
 #### Predefined commit message
 
 While commiting merge changes commit message will be set to `merged <branch>` if
-different branch was merged or to `merged <node>`
+different branch was merged or to `merged <node>`.
 
 ## Installation
 
@@ -69,4 +69,4 @@ Download `vc-hgcmd.el` and run:
 
 <kbd>M-x</kbd> `package-install-file` <kbd>RET</kbd> `<path-to-vc-hgcmd-el>` <kbd>RET</kbd>
 
-Also you need to add `Hgcmd` to `vc-handled-backeds`.
+Also you need to add `Hgcmd` to `vc-handled-backeds` before or instead `Hg`.
