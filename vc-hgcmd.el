@@ -46,7 +46,7 @@
 ;; It's not customizable yet.
 ;;
 ;; - Amend and close branch commits
-;; While editing commit message you can togle --amend and --close-branch flags.
+;; While editing commit message you can toggle --amend and --close-branch flags.
 ;;
 ;; - Merge branch
 ;; vc-hgcmd will ask for branch name to merge.
