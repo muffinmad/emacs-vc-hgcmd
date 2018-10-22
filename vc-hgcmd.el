@@ -51,8 +51,8 @@
 ;; - Merge branch
 ;; vc-hgcmd will ask for branch name to merge.
 ;;
-;; - Default pull argements
-;; You can customize default hg pulll command arguments.
+;; - Default pull arguments
+;; You can customize default hg pull command arguments.
 ;; By default it's --update. You can change it for particular pull by invoking `vc-pull' with prefix argument.
 ;;
 ;; - Branches and tags as revision completion table
