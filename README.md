@@ -23,7 +23,7 @@ Also you can use `vc-find-conflicted-file` to find next file with unresolved mer
 
 #### hg summary as `vc-dir` extra headers
 
-`hg cummary` command gives useful information about commit, update and phase states.
+`hg summary` command gives useful information about commit, update and phase states.
 
 #### Current branch is displayed on mode line.
 
@@ -46,7 +46,7 @@ By default it's `--update`. You can change it for particular pull by invoking `v
 
 Instead of list of all revisions of file `vc-hgcmd` provides list of named branches and tags.
 It's very useful on `vc-retrieve-tag`.
-You can specify `-C` to run `hg update` with `-C` flag and discard all uncommited changes.
+You can specify `-C` to run `hg update` with `-C` flag and discard all uncommitted changes.
 
 #### Filenames in `vc-annotate` buffer are hidden
 
@@ -60,7 +60,7 @@ If `vc-create-tag` is invoked with prefix argument then named branch will be cre
 
 #### Predefined commit message
 
-While commiting merge changes commit message will be set to `merged <branch>` if
+While committing merge changes commit message will be set to `merged <branch>` if
 different branch was merged or to `merged <node>`.
 
 ## Installation
@@ -69,4 +69,4 @@ Download `vc-hgcmd.el` and run:
 
 <kbd>M-x</kbd> `package-install-file` <kbd>RET</kbd> `<path-to-vc-hgcmd-el>` <kbd>RET</kbd>
 
-Also you need to add `Hgcmd` to `vc-handled-backeds` before or instead `Hg`.
+Also you need to add `Hgcmd` to `vc-handled-backends` before or instead `Hg`.

@@ -40,7 +40,7 @@
 ;; Also you can use `vc-find-conflicted-file' to find next file with unresolved merge conflict.
 ;;
 ;; - hg summary as `vc-dir' extra headers
-;; hg cummary command gives useful information about commit, update and phase states.
+;; hg summary command gives useful information about commit, update and phase states.
 ;;
 ;; - Current branch is displayed on mode line.
 ;; It's not customizable yet.
@@ -58,7 +58,7 @@
 ;; - Branches and tags as revision completion table
 ;; Instead of list of all revisions of file vc-hgcmd provides list of named branches and tags.
 ;; It's very useful on `vc-retrieve-tag'.
-;; You can specify -C to run hg update with -C flag and discard all uncommited changes.
+;; You can specify -C to run hg update with -C flag and discard all uncommitted changes.
 ;;
 ;; - Filenames in vc-annotate buffer are hidden
 ;; They are needed to annotate changes across renames but mostly useless in annotate buffer.
@@ -69,7 +69,7 @@
 ;; If `vc-create-tag' is invoked with prefix argument then named branch will be created.
 ;;
 ;; - Predefined commit message
-;; While commiting merge changes commit message will be set to 'merged <branch>' if
+;; While committing merge changes commit message will be set to 'merged <branch>' if
 ;; different branch was merged or to 'merged <node>'
 
 ;;; Code:
@@ -453,7 +453,7 @@ Insert 'Running command' and display buffer text if COMMAND"
 ;; TODO status-fileinfo-extra
 
 (defun vc-hgcmd-working-revision (file)
-  "Working revision. Return repository working revision if FILE is commited."
+  "Working revision. Return repository working revision if FILE is committed."
   (if (and file (eq 'added (vc-state file)))
       "0"
     (or (vc-hgcmd-command "log" "-l" "1" "-f" "-T" "{rev}") "0")))
@@ -735,7 +735,7 @@ Insert 'Running command' and display buffer text if COMMAND"
 (declare-function log-edit-mode "log-edit" ())
 
 (defun vc-hgcmd--set-log-edit-summary ()
-  "Set summary of commit message to 'merged ...' if commiting after merge."
+  "Set summary of commit message to 'merged ...' if committing after merge."
   (let* ((parents (split-string (vc-hgcmd-command "log" "-r" "p1()+p2()" "--template" "{node}\\0{branch}\n") "\n"))
          (p1 (car parents))
          (p2 (cadr parents)))
