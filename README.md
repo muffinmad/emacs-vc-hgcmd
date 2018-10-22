@@ -37,9 +37,9 @@ While editing commit message you can togle `--amend` and `--close-branch` flags.
 
 `vc-hgcmd` will ask for branch name to merge.
 
-#### Default pull argements
+#### Default pull arguments
 
-You can customize default `hg pulll` command arguments.
+You can customize default `hg pull` command arguments.
 By default it's `--update`. You can change it for particular pull by invoking `vc-pull` with prefix argument.
 
 #### Branches and tags as revision completion table
