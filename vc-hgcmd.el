@@ -279,7 +279,7 @@ Insert 'Running command' and display buffer text if COMMAND"
           (goto-char (point-max))
           (unless (eq (point) (point-min)) (insert "\n"))
           (setq window-start (point))
-          (insert (concat "Running \"" (mapconcat #'identity command " ") "%s\"...\n"))))
+          (insert (concat "Running \"" (mapconcat #'identity command " ") "\"...\n"))))
       (let ((window (display-buffer buffer)))
         (when window (set-window-start window window-start))))
     buffer))
