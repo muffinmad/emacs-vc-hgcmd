@@ -654,7 +654,11 @@ Insert 'Running command' and display buffer text if COMMAND"
 
 (defun vc-hgcmd-diff (files &optional rev1 rev2 buffer _async)
   "Place diff of FILES between REV1 and REV2 into BUFFER."
-  (let ((command (nconc (list "diff") (when rev1 (list "-r" rev1)) (when rev2 (list "-r" rev2)) files)))
+  (let ((command (nconc
+                  (list "diff")
+                  (when rev1 (list "-r" rev1))
+                  (when rev2 (list "-r" rev2))
+                  (unless (equal files (list default-directory)) files))))
     (apply #'vc-hgcmd-command-output-buffer buffer command)))
 
 (defun vc-hgcmd-revision-completion-table (_files)
