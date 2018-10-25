@@ -376,8 +376,9 @@ Insert 'Running command' and display buffer text if COMMAND"
 (defun vc-hgcmd-registered (file)
   "Is file FILE is registered."
   (when (vc-hgcmd-root file)
-    (let ((state (vc-hgcmd-state file)))
-      (and state (not (memq state '(ignored unregistered)))))))
+    (or (file-directory-p file)
+        (let ((state (vc-hgcmd-state file)))
+          (and state (not (memq state '(ignored unregistered))))))))
 
 (defun vc-hgcmd-state (file)
   "State for FILE."
