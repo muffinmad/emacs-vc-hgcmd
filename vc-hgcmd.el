@@ -595,7 +595,7 @@ Insert 'Running command' and display buffer text if COMMAND"
             (list (if (eq limit 1) "-r" "-b") start-revision))
           (when limit (list "-l" (number-to-string limit)))
           (unless (or shortlog (eq limit 1)) (list "-f")) ; follow file renames
-          files)))
+          (unless (equal files (list default-directory)) files))))
     ;; If limit is 1 or vc-log-show-limit then it is initial diff and better move to working revision
     ;; otherwise remember point position and restore it later
     (let ((p (with-current-buffer buffer (unless (or (member limit (list 1 vc-log-show-limit))) (point)))))
