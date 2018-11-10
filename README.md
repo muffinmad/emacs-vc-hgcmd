@@ -1,4 +1,5 @@
 [![License GPL 3](https://img.shields.io/badge/license-GPL_3-green.svg)](http://www.gnu.org/copyleft/gpl.html)
+[![MELPA](http://melpa.org/packages/vc-hgcmd-badge.svg)](http://melpa.org/#/vc-hgcmd)
 
 # emacs-vc-hgcmd
 
