@@ -13,9 +13,13 @@ Because communicating with single `hg` process over pipe is much faster than sta
 
 ### Other improvements and differences
 
-#### File renames and short log
+#### File renames in dir status
 
-`vc-hgcmd` can't show file renames in `vc-dir` and doesn't have short log version yet.
+`vc-hgcmd` can't show file renames in `vc-dir` yet.
+
+#### Graph log
+
+Graph log is used when viewing branch or root log.
 
 #### Unresolved conflict status for a file
 

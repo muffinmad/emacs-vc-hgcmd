@@ -5,7 +5,7 @@
 ;; Author: Andrii Kolomoiets <andreyk.mad@gmail.com>
 ;; Keywords: vc
 ;; URL: https://github.com/muffinmad/emacs-vc-hgcmd
-;; Package-Version: 1.0
+;; Package-Version: 1.1
 ;; Package-Requires: ((emacs "25.1"))
 
 ;; This file is NOT part of GNU Emacs.
@@ -33,7 +33,9 @@
 ;;
 ;; Also there are some other improvements and differences:
 ;;
-;; - vc-hgcmd can't show file renames in `vc-dir' and doesn't have short log version yet
+;; - vc-hgcmd can't show file renames in `vc-dir' yet
+;;
+;; - graph log is used for branch or root log
 ;;
 ;; - Unresolved conflict status for a file
 ;; Files with unresolved merge conflicts have appropriate status in `vc-dir'.
@@ -590,6 +592,7 @@ Insert 'Running command' and display buffer text if COMMAND"
   (let ((command
          (nconc
           (list "log")
+          (when shortlog (list "-G"))
           (when start-revision
             ;; start revision is used for branch log or specific revision log when limit is 1
             (list (if (eq limit 1) "-r" "-b") start-revision))
@@ -618,7 +621,11 @@ Insert 'Running command' and display buffer text if COMMAND"
   "Log incoming from REMOTE-LOCATION to BUFFER."
   (vc-hgcmd--log-in-or-out "incoming" buffer remote-location))
 
-(defconst vc-hgcmd--message-re "^changeset:\\s-*\\(%s\\):\\([[:xdigit:]]+\\)")
+(defun vc-hgcmd--graph-data-re (re)
+  "Add graph data re to RE."
+  (concat "^\\(?:[o@_x*+-|/: ]*\\)" re))
+
+(defconst vc-hgcmd--message-re (vc-hgcmd--graph-data-re "changeset:\\s-*\\(%s\\):\\([[:xdigit:]]+\\)"))
 (defconst vc-hgcmd--log-view-message-re (format vc-hgcmd--message-re "[[:digit:]]+"))
 (defvar log-view-per-file-logs)
 (defvar log-view-message-re)
@@ -631,16 +638,16 @@ Insert 'Running command' and display buffer text if COMMAND"
   (set (make-local-variable 'log-view-font-lock-keywords)
   (append
    log-view-font-lock-keywords
-   '(
-     ("^user:[ \t]+\\([^<(]+?\\)[ \t]*[(<]\\([A-Za-z0-9_.+-]+@[A-Za-z0-9_.-]+\\)[>)]"
+   `(
+     (,(vc-hgcmd--graph-data-re "user:[ \t]+\\([^<(]+?\\)[ \t]*[(<]\\([A-Za-z0-9_.+-]+@[A-Za-z0-9_.-]+\\)[>)]")
 	  (1 'change-log-name)
 	  (2 'change-log-email))
-	 ("^user:[ \t]+\\([A-Za-z0-9_.+-]+\\(?:@[A-Za-z0-9_.-]+\\)?\\)"
+	 (,(vc-hgcmd--graph-data-re "user:[ \t]+\\([A-Za-z0-9_.+-]+\\(?:@[A-Za-z0-9_.-]+\\)?\\)")
 	  (1 'change-log-email))
-	 ("^date: \\(.+\\)" (1 'change-log-date))
-     ("^parent:[ \t]+\\([[:digit:]]+:[[:xdigit:]]+\\)" (1 'change-log-acknowledgment))
-	 ("^tag: +\\([^ ]+\\)$" (1 'highlight))
-	 ("^summary:[ \t]+\\(.+\\)" (1 'log-view-message))))))
+	 (,(vc-hgcmd--graph-data-re "date: \\(.+\\)") (1 'change-log-date))
+     (,(vc-hgcmd--graph-data-re "parent:[ \t]+\\([[:digit:]]+:[[:xdigit:]]+\\)") (1 'change-log-acknowledgment))
+	 (,(vc-hgcmd--graph-data-re "tag: +\\([^ ]+\\)$") (1 'highlight))
+	 (,(vc-hgcmd--graph-data-re "summary:[ \t]+\\(.+\\)") (1 'log-view-message))))))
 
 (defun vc-hgcmd-show-log-entry (revision)
   "Show log entry positioning on REVISION."
