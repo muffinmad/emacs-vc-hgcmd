@@ -71,7 +71,11 @@ different branch was merged or to `merged <node>`.
 
 ## Installation
 
-Download `vc-hgcmd.el` and run:
+`vc-hgcmd` available on [MELPA](http://melpa.org):
+
+<kbd>M-x</kbd> `package-install` <kbd>RET</kbd> `vc-hgcmd` <kbd>RET</kbd>.
+
+Alternatively, you can download `vc-hgcmd.el` and run:
 
 <kbd>M-x</kbd> `package-install-file` <kbd>RET</kbd> `<path-to-vc-hgcmd-el>` <kbd>RET</kbd>
 
