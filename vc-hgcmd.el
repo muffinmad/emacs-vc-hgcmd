@@ -5,7 +5,7 @@
 ;; Author: Andrii Kolomoiets <andreyk.mad@gmail.com>
 ;; Keywords: vc
 ;; URL: https://github.com/muffinmad/emacs-vc-hgcmd
-;; Package-Version: 1.1
+;; Package-Version: 1.2
 ;; Package-Requires: ((emacs "25.1"))
 
 ;; This file is NOT part of GNU Emacs.
@@ -309,10 +309,16 @@ Insert 'Running command' and display buffer text if COMMAND"
   (with-temp-buffer
     (let ((cmd (make-vc-hgcmd--command :command command :output-buffer (current-buffer) :wait t)))
       (vc-hgcmd--run-command cmd)
-      ;; TODO handle result codes
       (let ((result (string-trim-right (buffer-string))))
-        (when (> (length result) 0)
-          result)))))
+        ;; TODO min result code for each command that is not error
+        (if (= (vc-hgcmd--command-result-code cmd) 255)
+            (with-current-buffer (vc-hgcmd--get-output-buffer command)
+              (goto-char (point-max))
+              (let ((inhibit-read-only t))
+                (insert (concat result "\n")))
+              nil)
+          (when (> (length result) 0)
+            result))))))
 
 (defun vc-hgcmd-command-output-buffer (buffer &rest command)
   "Send output of COMMAND to BUFFER and wait COMMAND to finish."
