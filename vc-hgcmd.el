@@ -5,7 +5,7 @@
 ;; Author: Andrii Kolomoiets <andreyk.mad@gmail.com>
 ;; Keywords: vc
 ;; URL: https://github.com/muffinmad/emacs-vc-hgcmd
-;; Package-Version: 1.2
+;; Package-Version: 1.3
 ;; Package-Requires: ((emacs "25.1"))
 
 ;; This file is NOT part of GNU Emacs.
@@ -72,7 +72,20 @@
 ;;
 ;; - Predefined commit message
 ;; While committing merge changes commit message will be set to 'merged <branch>' if
-;; different branch was merged or to 'merged <node>'
+;; different branch was merged or to 'merged <node>'.
+;;
+;; Additionally predefined commit message passed to custom function
+;; `vc-hgcmd-log-edit-message-function' so one can change it.
+;; For example, to include current task in commit message:
+;;
+;;     (defun my/hg-commit-message (original-message)
+;;       (if org-clock-current-task
+;;           (concat org-clock-current-task " " original-message)
+;;         original-message))
+;;
+;;     (custom-set-variables
+;;      '(vc-hgcmd-log-edit-message-function 'my/hg-commit-message))
+
 
 ;;; Code:
 
@@ -105,6 +118,15 @@ You can edit this arguments for specific pull command by invoke `vc-pull' with p
 (defcustom vc-hgcmd-push-alternate-args "--new-branch"
   "Initial value for hg push arguments when asked."
   :type '(string))
+
+(defcustom vc-hgcmd-log-edit-message-function nil
+  "Function to return string that will be used as initial value for log edit.
+First param will be commit message computed by backend: 'merged <branch>' if
+named branch was merged to current branch or 'merged <node>' if two heads on
+same branch was merged."
+  :type '(choice
+          (function)
+          (const :tag "Default commit message" nil)))
 
 
 ;;;; Consts. Customizing this can lead to unexpected behaviour
@@ -752,16 +774,25 @@ Insert 'Running command' and display buffer text if COMMAND"
 
 (declare-function log-edit-mode "log-edit" ())
 
-(defun vc-hgcmd--set-log-edit-summary ()
-  "Set summary of commit message to 'merged ...' if committing after merge."
+(defun vc-hgcmd--log-edit-default-message ()
+  "Return 'merged ...' if there are two parents."
   (let* ((parents (split-string (vc-hgcmd-command "log" "-r" "p1()+p2()" "--template" "{node}\\0{branch}\n") "\n"))
          (p1 (car parents))
          (p2 (cadr parents)))
     (when p2
       (let ((p1 (split-string p1 "\0"))
             (p2 (split-string p2 "\0")))
-        (save-excursion
-          (insert (concat "merged " (if (string= (cadr p1) (cadr p2)) (car p2) (cadr p2)))))))))
+        (concat "merged " (if (string= (cadr p1) (cadr p2)) (car p2) (cadr p2)))))))
+
+(defun vc-hgcmd--set-log-edit-summary ()
+  "Set summary of commit message to 'merged ...' if committing after merge."
+  (let* ((message (or (vc-hgcmd--log-edit-default-message) ""))
+         (message (if vc-hgcmd-log-edit-message-function
+                      (funcall vc-hgcmd-log-edit-message-function message)
+                    message)))
+    (when (and message (length message))
+      (save-excursion
+        (insert message)))))
 
 (defun vc-hgcmd-log-edit-toggle-close-branch ()
   "Toggle --close-branch commit option."

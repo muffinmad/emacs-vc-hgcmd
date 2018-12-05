@@ -69,6 +69,18 @@ If `vc-create-tag` is invoked with prefix argument then named branch will be cre
 While committing merge changes commit message will be set to `merged <branch>` if
 different branch was merged or to `merged <node>`.
 
+Additionally predefined commit message passed to custom function `vc-hgcmd-log-edit-message-function` so one can change it. For example, to include current task in commit message:
+
+```elisp
+(defun my/hg-commit-message (original-message)
+  (if org-clock-current-task
+      (concat org-clock-current-task " " original-message)
+    original-message))
+
+(custom-set-variables
+ '(vc-hgcmd-log-edit-message-function 'my/hg-commit-message))
+```
+
 ## Installation
 
 `vc-hgcmd` available on [MELPA](http://melpa.org):
