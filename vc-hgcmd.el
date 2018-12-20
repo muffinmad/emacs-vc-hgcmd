@@ -470,8 +470,9 @@ Insert 'Running command' and display buffer text if COMMAND"
 
 (defun vc-hgcmd-dir-extra-headers (_dir)
   "Return summary command for DIR output as dir extra headers."
-  (let* ((parents (split-string (vc-hgcmd-command "log" "-r" "p1()+p2()" "--template" "{rev}:{node|short}\\0{branch}\\0{tags}\\0{desc|firstline}\n") "\n"))
-         (result (apply #'concat (mapcar #'vc-hgcmd--parent-info parents))))
+  (let* ((parents (vc-hgcmd-command "log" "-r" "p1()+p2()" "--template" "{rev}:{node|short}\\0{branch}\\0{tags}\\0{desc|firstline}\n"))
+         (result (when parents
+                   (apply #'concat (mapcar #'vc-hgcmd--parent-info (split-string parents "\n"))))))
     (with-temp-buffer
       (vc-hgcmd-command-output-buffer (current-buffer) "summary")
       (concat result
