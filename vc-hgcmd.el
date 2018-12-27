@@ -400,6 +400,10 @@ Insert 'Running command' and display buffer text if COMMAND"
 (defconst vc-hgcmd--no-file-re
   ".+: No such file or directory$")
 
+(defun vc-hgcmd--file-relative-name (file)
+  "Return FILE file name relative to vc root."
+  (file-relative-name file (vc-hgcmd-root file)))
+
 ;;;; VC backend
 
 (defun vc-hgcmd-revision-granularity ()
@@ -420,7 +424,7 @@ Insert 'Running command' and display buffer text if COMMAND"
 
 (defun vc-hgcmd-state (file)
   "State for FILE."
-  (let ((out (vc-hgcmd-command "status" "-A" (file-relative-name file))))
+  (let ((out (vc-hgcmd-command "status" "-A" (vc-hgcmd--file-relative-name file))))
     (when (and out (null (string-match-p vc-hgcmd--no-file-re out)))
       (let ((state (cdr (assoc (aref out 0) vc-hgcmd--translation-status))))
         (if (and (eq state 'edited) (vc-hgcmd--file-unresolved-p file))
@@ -446,8 +450,8 @@ Insert 'Running command' and display buffer text if COMMAND"
   "Call UPDATE-FUNCTION with status for files in DIR or FILES."
     ;; TODO track file renames with -C option
     (let ((command (if files
-                       (nconc (list "status" "-A") (mapcar #'file-relative-name files))
-                     (list "status" (file-relative-name dir)))))
+                       (nconc (list "status" "-A") (mapcar #'vc-hgcmd--file-relative-name files))
+                     (list "status" (vc-hgcmd--file-relative-name dir)))))
     (vc-hgcmd--run-command
      (make-vc-hgcmd--command
       :command command
@@ -496,7 +500,7 @@ Insert 'Running command' and display buffer text if COMMAND"
 
 (defun vc-hgcmd-working-revision (file)
   "Working revision. Return repository working revision if FILE is committed."
-  (if (and file (eq 'added (vc-state (file-relative-name file))))
+  (if (and file (eq 'added (vc-state (vc-hgcmd--file-relative-name file))))
       "0"
     (or (vc-hgcmd-command "log" "-l" "1" "-f" "-T" "{rev}") "0")))
 
@@ -506,7 +510,7 @@ Insert 'Running command' and display buffer text if COMMAND"
 
 (defun vc-hgcmd-mode-line-string (file)
   "Return a string for `vc-mode-line' to put in the mode line for FILE."
-  (let* ((state (vc-state (file-relative-name file)))
+  (let* ((state (vc-state (vc-hgcmd--file-relative-name file)))
 	     (state-echo nil)
 	     (face nil)
          ;; TODO allow to customize it.
@@ -551,7 +555,7 @@ Insert 'Running command' and display buffer text if COMMAND"
 
 (defun vc-hgcmd-register (files &optional _comment)
   "Register FILES."
-  (apply #'vc-hgcmd-command (nconc (list "add") (mapcar #'file-relative-name files))))
+  (apply #'vc-hgcmd-command (nconc (list "add") (mapcar #'vc-hgcmd--file-relative-name files))))
 
 (defalias 'vc-hgcmd-responsible-p 'vc-hgcmd-root)
 
@@ -559,7 +563,7 @@ Insert 'Running command' and display buffer text if COMMAND"
 
 (defun vc-hgcmd-unregister (file)
   "Forget FILE."
-  (vc-hgcmd-command "forget" (file-relative-name file)))
+  (vc-hgcmd-command "forget" (vc-hgcmd--file-relative-name file)))
 
 (declare-function log-edit-extract-headers "log-edit" (headers string))
 (declare-function log-edit-toggle-header "log-edit" (header value))
@@ -583,11 +587,11 @@ Insert 'Running command' and display buffer text if COMMAND"
                                       ("Amend" . vc-hgcmd--arg-amend)
                                       ("Close-branch" . vc-hgcmd--arg-close-branch))
                                     (encode-coding-string comment 'utf-8))
-          (mapcar #'file-relative-name files))))
+          (mapcar #'vc-hgcmd--file-relative-name files))))
 
 (defun vc-hgcmd-find-revision (file rev buffer)
   "Put REV of FILE to BUFFER."
-  (let ((file (file-relative-name file)))
+  (let ((file (vc-hgcmd--file-relative-name file)))
     (apply #'vc-hgcmd-command-output-buffer buffer (if rev (list "cat" "-r" rev file) (list "cat" file)))))
 
 (defun vc-hgcmd-checkout (file &optional rev)
@@ -597,7 +601,7 @@ Insert 'Running command' and display buffer text if COMMAND"
 (defun vc-hgcmd-revert (file &optional contents-done)
   "Refert FILE if not CONTENTS-DONE."
   (unless contents-done
-    (vc-hgcmd-command "revert" (file-relative-name file))))
+    (vc-hgcmd-command "revert" (vc-hgcmd--file-relative-name file))))
 
 (defun vc-hgcmd-merge-branch ()
   "Merge."
@@ -624,7 +628,7 @@ Insert 'Running command' and display buffer text if COMMAND"
 
 (defun vc-hgcmd-mark-resolved (files)
   "Mark FILES resolved."
-  (apply #'vc-hgcmd-command (nconc (list "resolve" "-m") (mapcar #'file-relative-name files))))
+  (apply #'vc-hgcmd-command (nconc (list "resolve" "-m") (mapcar #'vc-hgcmd--file-relative-name files))))
 
 (defun vc-hgcmd-print-log (files buffer &optional shortlog start-revision limit)
   "Put maybe SHORTLOG log of FILES to BUFFER starting with START-REVISION limited by LIMIT."
@@ -638,7 +642,7 @@ Insert 'Running command' and display buffer text if COMMAND"
             (list (if (eq limit 1) "-r" "-b") start-revision))
           (when limit (list "-l" (number-to-string limit)))
           (unless (or shortlog (eq limit 1)) (list "-f")) ; follow file renames
-          (unless (equal files (list default-directory)) (mapcar #'file-relative-name files)))))
+          (unless (equal files (list default-directory)) (mapcar #'vc-hgcmd--file-relative-name files)))))
     ;; If limit is 1 or vc-log-show-limit then it is initial diff and better move to working revision
     ;; otherwise remember point position and restore it later
     (let ((p (with-current-buffer buffer (unless (or (member limit (list 1 vc-log-show-limit))) (point)))))
@@ -705,7 +709,7 @@ Insert 'Running command' and display buffer text if COMMAND"
                   (list "diff")
                   (when rev1 (list "-r" rev1))
                   (when rev2 (list "-r" rev2))
-                  (unless (equal files (list default-directory)) (mapcar #'file-relative-name files)))))
+                  (unless (equal files (list default-directory)) (mapcar #'vc-hgcmd--file-relative-name files)))))
     (apply #'vc-hgcmd-command-output-buffer buffer command)))
 
 (defun vc-hgcmd-revision-completion-table (_files)
@@ -728,7 +732,7 @@ Insert 'Running command' and display buffer text if COMMAND"
          (nconc
           (list "annotate" "-qdnuf")
           (when revision (list "-r" revision))
-          (list (file-relative-name file))))
+          (list (vc-hgcmd--file-relative-name file))))
   ;; hide filenames but keep it in properties
   (with-current-buffer buffer
     (let ((inhibit-read-only t))
@@ -834,7 +838,7 @@ Insert 'Running command' and display buffer text if COMMAND"
 
 (defun vc-hgcmd-delete-file (file)
   "Delete FILE."
-  (vc-hgcmd-command "remove" "--force" (file-relative-name file)))
+  (vc-hgcmd-command "remove" "--force" (vc-hgcmd--file-relative-name file)))
 
 (defun vc-hgcmd-rename-file (old new)
   "Rename file from OLD to NEW using `hg mv'."
@@ -842,7 +846,7 @@ Insert 'Running command' and display buffer text if COMMAND"
 
 (defun vc-hgcmd--file-unresolved-p (file)
   "Return t if FILE is in conflict state."
-  (let ((out (vc-hgcmd-command "resolve" "-l" (file-relative-name file))))
+  (let ((out (vc-hgcmd-command "resolve" "-l" (vc-hgcmd--file-relative-name file))))
     (and out (eq (aref out 0) ?U))))
 
 (defun vc-hgcmd--after-save-hook ()
