@@ -484,6 +484,8 @@ Insert 'Running command' and display buffer text if COMMAND"
     (with-temp-buffer
       (vc-hgcmd-command-output-buffer (current-buffer) "summary")
       (concat result
+              (unless parents
+                (vc-hgcmd--summary-info "parent" "Parent     : "))
               (vc-hgcmd--summary-info "branch" "Branch     : ")
               (vc-hgcmd--summary-info "commit" "Commit     : ")
               (vc-hgcmd--summary-info "update" "Update     : ")
