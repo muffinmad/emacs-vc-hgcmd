@@ -412,7 +412,7 @@ Insert 'Running command' and display buffer text if COMMAND"
 
 (defun vc-hgcmd-state (file)
   "State for FILE."
-  (let ((out (vc-hgcmd-command "status" "-A" file)))
+  (let ((out (vc-hgcmd-command "status" "-A" (file-relative-name file))))
     (when (and out (null (string-match-p vc-hgcmd--no-file-re out)))
       (let ((state (cdr (assoc (aref out 0) vc-hgcmd--translation-status))))
         (if (and (eq state 'edited) (vc-hgcmd--file-unresolved-p file))
@@ -439,7 +439,7 @@ Insert 'Running command' and display buffer text if COMMAND"
     ;; TODO track file renames with -C option
     (let ((command (if files
                        (nconc (list "status" "-A") files)
-                     (list "status" dir))))
+                     (list "status" (file-relative-name dir)))))
     (vc-hgcmd--run-command
      (make-vc-hgcmd--command
       :command command
