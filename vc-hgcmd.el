@@ -250,6 +250,8 @@ Insert output to process buffer and check if amount of data is enought to parse 
           ;; TODO parse encoding
           (while (not (vc-hgcmd--read-output))
             (accept-process-output process 0.1 nil t))
+          ;; send \n after command data so tty process can read data
+          (process-send-string process "runcommand\n")
           (set-process-filter process #'vc-hgcmd--cmdserver-process-filter)
           process)))))
 
@@ -308,20 +310,26 @@ Insert 'Running command' and display buffer text if COMMAND"
         (when window (set-window-start window window-start))))
     buffer))
 
-(defun vc-hgcmd--prepare-command-to-send (command)
-  "Prepare COMMAND to send to hg process."
-  (let ((args (mapconcat #'identity command "\0")))
-    (concat (bindat-pack '((l u32)) `((l . ,(length args)))) args)))
+(defun vc-hgcmd--prepare-command-to-send (command tty)
+  "Prepare COMMAND to send to hg process. Escape each character in binary data with ^V if TTY."
+  (let* ((args (mapconcat #'identity command "\0"))
+         (binary-data (bindat-pack '((l u32)) `((l . ,(length args))))))
+    (concat (if tty
+                (mapconcat #'identity (mapcar (lambda (c) (concat "\x16" (char-to-string c))) binary-data) "")
+              binary-data)
+            args)))
 
 (defun vc-hgcmd--run-command (cmd)
   "Run hg CMD."
   (let* ((buffer (vc-hgcmd--process-buffer))
-         (process (get-buffer-process buffer)))
+         (process (get-buffer-process buffer))
+         (tty (process-tty-name process)))
     (with-current-buffer buffer
       (while vc-hgcmd--current-command
         (accept-process-output process 0.1 nil t))
       (setq vc-hgcmd--current-command cmd)
-      (process-send-string process (concat "runcommand\n" (vc-hgcmd--prepare-command-to-send (vc-hgcmd--command-command cmd))))
+      ;; send \n after command data so tty process can read data
+      (process-send-string process (concat (vc-hgcmd--prepare-command-to-send (vc-hgcmd--command-command cmd) tty) "runcommand\n"))
       (when (vc-hgcmd--command-wait cmd)
         (while vc-hgcmd--current-command
           (accept-process-output process 0.1 nil t))))))
