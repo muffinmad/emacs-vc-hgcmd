@@ -419,7 +419,12 @@ Insert 'Running command' and display buffer text if COMMAND"
   "Is file FILE is registered."
   (when (vc-hgcmd-root file)
     (or (file-directory-p file)
-        (let ((state (vc-hgcmd-state file)))
+        ;; vc-registered is called for buffer-file-name and
+        ;; shortly then after for truename. Update default-dir so
+        ;; 'hg state' will be called in right repo
+        (let ((state
+               (let ((default-directory (file-name-directory (expand-file-name file))))
+                 (vc-hgcmd-state file))))
           (and state (not (memq state '(ignored unregistered))))))))
 
 (defun vc-hgcmd-state (file)
