@@ -5,7 +5,7 @@
 ;; Author: Andrii Kolomoiets <andreyk.mad@gmail.com>
 ;; Keywords: vc
 ;; URL: https://github.com/muffinmad/emacs-vc-hgcmd
-;; Package-Version: 1.3.2
+;; Package-Version: 1.3.3
 ;; Package-Requires: ((emacs "25.1"))
 
 ;; This file is NOT part of GNU Emacs.
@@ -237,23 +237,32 @@ Insert output to process buffer and check if amount of data is enought to parse 
     (let ((process-environment (append vc-hgcmd-cmdserver-process-environment process-environment))
           (process-connection-type nil))
       (with-current-buffer buffer
-        (let ((process (apply
-                        #'start-file-process
-                        (concat "vc-hgcmd process: " (vc-hgcmd--project-name default-directory))
-                        buffer
-                        vc-hgcmd-hg-executable
-                        vc-hgcmd-cmdserver-args)))
-          (set-process-sentinel process #'ignore)
-          (set-process-query-on-exit-flag process nil)
-          (set-process-coding-system process 'no-conversion 'no-conversion)
-          ;; read hello message
-          ;; TODO parse encoding
-          (while (not (vc-hgcmd--read-output))
-            (accept-process-output process 0.1 nil t))
-          ;; send \n after command data so tty process can read data
-          (process-send-string process "runcommand\n")
-          (set-process-filter process #'vc-hgcmd--cmdserver-process-filter)
-          process)))))
+        (let ((inhibit-read-only t))
+          (erase-buffer))
+        (let ((process
+               (condition-case nil
+                   (apply
+                    #'start-file-process
+                    (concat "vc-hgcmd process: " (vc-hgcmd--project-name default-directory))
+                    buffer
+                    vc-hgcmd-hg-executable
+                    vc-hgcmd-cmdserver-args)
+                 (error nil))))
+          ;; process will be nil if hg executable not found
+          (when (process-live-p process)
+            (set-process-sentinel process #'ignore)
+            (set-process-query-on-exit-flag process nil)
+            (set-process-coding-system process 'no-conversion 'no-conversion)
+            ;; read hello message
+            ;; TODO parse encoding
+            ;; check process again because it can be tramp sh process with output like "env: hg not found"
+            (while (and (process-live-p process) (not (vc-hgcmd--read-output)))
+              (accept-process-output process 0.1 nil t))
+            (when (process-live-p process)
+              ;; send \n after command data so tty process can read data
+              (process-send-string process "runcommand\n")
+              (set-process-filter process #'vc-hgcmd--cmdserver-process-filter)
+              process)))))))
 
 (defun vc-hgcmd--repo-dir ()
   "Get repo dir."
@@ -322,33 +331,34 @@ Insert 'Running command' and display buffer text if COMMAND"
 (defun vc-hgcmd--run-command (cmd)
   "Run hg CMD."
   (let* ((buffer (vc-hgcmd--process-buffer))
-         (process (get-buffer-process buffer))
-         (tty (process-tty-name process)))
+         (process (get-buffer-process buffer)))
     (with-current-buffer buffer
       (while vc-hgcmd--current-command
         (accept-process-output process 0.1 nil t))
-      (setq vc-hgcmd--current-command cmd)
-      ;; send \n after command data so tty process can read data
-      (process-send-string process (concat (vc-hgcmd--prepare-command-to-send (vc-hgcmd--command-command cmd) tty) "runcommand\n"))
-      (when (vc-hgcmd--command-wait cmd)
-        (while vc-hgcmd--current-command
-          (accept-process-output process 0.1 nil t))))))
+      (when (process-live-p process)
+        (setq vc-hgcmd--current-command cmd)
+        ;; send \n after command data so tty process can read data
+        (process-send-string process (concat (vc-hgcmd--prepare-command-to-send (vc-hgcmd--command-command cmd) (process-tty-name process)) "runcommand\n"))
+        (when (vc-hgcmd--command-wait cmd)
+          (while vc-hgcmd--current-command
+            (accept-process-output process 0.1 nil t)))
+        t))))
 
 (defun vc-hgcmd-command (&rest command)
   "Run hg COMMAND and return it's output."
   (with-temp-buffer
     (let ((cmd (make-vc-hgcmd--command :command command :output-buffer (current-buffer) :wait t)))
-      (vc-hgcmd--run-command cmd)
-      (let ((result (string-trim-right (buffer-string))))
-        ;; TODO min result code for each command that is not error
-        (if (= (vc-hgcmd--command-result-code cmd) 255)
-            (with-current-buffer (vc-hgcmd--get-output-buffer command)
-              (goto-char (point-max))
-              (let ((inhibit-read-only t))
-                (insert (concat result "\n")))
-              nil)
-          (when (> (length result) 0)
-            result))))))
+      (when (vc-hgcmd--run-command cmd)
+        (let ((result (string-trim-right (buffer-string))))
+          ;; TODO min result code for each command that is not error
+          (if (= (vc-hgcmd--command-result-code cmd) 255)
+              (with-current-buffer (vc-hgcmd--get-output-buffer command)
+                (goto-char (point-max))
+                (let ((inhibit-read-only t))
+                  (insert (concat result "\n")))
+                nil)
+            (when (> (length result) 0)
+              result)))))))
 
 (defun vc-hgcmd-command-output-buffer (buffer &rest command)
   "Send output of COMMAND to BUFFER and wait COMMAND to finish."
