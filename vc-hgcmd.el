@@ -463,10 +463,10 @@ Insert 'Running command' and display buffer text if COMMAND"
 
 (defun vc-hgcmd-dir-status-files (dir files update-function)
   "Call UPDATE-FUNCTION with status for files in DIR or FILES."
-    ;; TODO track file renames with -C option
-    (let ((command (if files
-                       (nconc (list "status" "-A") (mapcar #'vc-hgcmd--file-relative-name files))
-                     (list "status" (vc-hgcmd--file-relative-name dir)))))
+  ;; TODO track file renames with -C option
+  (let ((command (if files
+                     (nconc (list "status" "-A") (mapcar #'vc-hgcmd--file-relative-name files))
+                   (list "status" (vc-hgcmd--file-relative-name dir)))))
     (vc-hgcmd--run-command
      (make-vc-hgcmd--command
       :command command
@@ -695,18 +695,18 @@ Insert 'Running command' and display buffer text if COMMAND"
   (set (make-local-variable 'log-view-per-file-logs) nil)
   (set (make-local-variable 'log-view-message-re) vc-hgcmd--log-view-message-re)
   (set (make-local-variable 'log-view-font-lock-keywords)
-  (append
-   log-view-font-lock-keywords
-   `(
-     (,(vc-hgcmd--graph-data-re "user:[ \t]+\\([^<(]+?\\)[ \t]*[(<]\\([A-Za-z0-9_.+-]+@[A-Za-z0-9_.-]+\\)[>)]")
-	  (1 'change-log-name)
-	  (2 'change-log-email))
-	 (,(vc-hgcmd--graph-data-re "user:[ \t]+\\([A-Za-z0-9_.+-]+\\(?:@[A-Za-z0-9_.-]+\\)?\\)")
-	  (1 'change-log-email))
-	 (,(vc-hgcmd--graph-data-re "date: \\(.+\\)") (1 'change-log-date))
-     (,(vc-hgcmd--graph-data-re "parent:[ \t]+\\([[:digit:]]+:[[:xdigit:]]+\\)") (1 'change-log-acknowledgment))
-	 (,(vc-hgcmd--graph-data-re "tag: +\\([^ ]+\\)$") (1 'highlight))
-	 (,(vc-hgcmd--graph-data-re "summary:[ \t]+\\(.+\\)") (1 'log-view-message))))))
+       (append
+        log-view-font-lock-keywords
+        `(
+          (,(vc-hgcmd--graph-data-re "user:[ \t]+\\([^<(]+?\\)[ \t]*[(<]\\([A-Za-z0-9_.+-]+@[A-Za-z0-9_.-]+\\)[>)]")
+	       (1 'change-log-name)
+	       (2 'change-log-email))
+	      (,(vc-hgcmd--graph-data-re "user:[ \t]+\\([A-Za-z0-9_.+-]+\\(?:@[A-Za-z0-9_.-]+\\)?\\)")
+	       (1 'change-log-email))
+	      (,(vc-hgcmd--graph-data-re "date: \\(.+\\)") (1 'change-log-date))
+          (,(vc-hgcmd--graph-data-re "parent:[ \t]+\\([[:digit:]]+:[[:xdigit:]]+\\)") (1 'change-log-acknowledgment))
+	      (,(vc-hgcmd--graph-data-re "tag: +\\([^ ]+\\)$") (1 'highlight))
+	      (,(vc-hgcmd--graph-data-re "summary:[ \t]+\\(.+\\)") (1 'log-view-message))))))
 
 (defun vc-hgcmd-show-log-entry (revision)
   "Show log entry positioning on REVISION."
