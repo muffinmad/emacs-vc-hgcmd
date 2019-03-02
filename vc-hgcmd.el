@@ -204,32 +204,31 @@ same branch was merged."
 Insert output to process buffer and check if amount of data is enought to parse it to output buffer."
   (let ((buffer (process-buffer process)))
     (when (buffer-live-p buffer)
-      (let* ((current-command (with-current-buffer buffer vc-hgcmd--current-command))
-             (output-buffer (vc-hgcmd--command-output-buffer current-command)))
-        (when output-buffer
-          (with-current-buffer buffer
-            (goto-char (point-max))
-            (let ((inhibit-read-only t)) (insert output))
-            (while
-                (let ((data (vc-hgcmd--read-output)))
-                  (when data
-                    (let ((channel (car data))
-                          (data (cdr data)))
-                      (with-current-buffer output-buffer
-                        (let ((inhibit-read-only t))
-                          (goto-char (point-max))
-                          (cond ((or (eq channel ?e) (eq channel ?o))
-                                 (insert (decode-coding-string (bindat-get-field (bindat-unpack `((f str ,(length data))) data) 'f) 'utf-8)))
-                                ((eq channel ?r)
-                                 (setf (vc-hgcmd--command-result-code current-command) (bindat-get-field (bindat-unpack `((f u32)) data) 'f))
-                                 (with-current-buffer buffer (setq vc-hgcmd--current-command nil))
-                                 (let ((callback (vc-hgcmd--command-callback current-command))
-                                       (args (vc-hgcmd--command-callback-args current-command)))
-                                   (when callback
-                                     (if args (funcall callback args) (funcall callback)))))
-                                ;; TODO: cmdserver clients must handle I and L channels
-                                (t (error (format "unknown channel %c\n" channel)))))))
-                    t)))))))))
+      (with-current-buffer buffer
+        (goto-char (point-max))
+        (let ((inhibit-read-only t)) (insert output))
+        (let* ((current-command (or (with-current-buffer buffer vc-hgcmd--current-command)
+                                    (error "Hgcmd process output without command: %s" output))))
+          (while
+              (let ((data (vc-hgcmd--read-output)))
+                (when data
+                  (let ((channel (car data))
+                        (data (cdr data)))
+                    (with-current-buffer (vc-hgcmd--command-output-buffer current-command)
+                      (let ((inhibit-read-only t))
+                        (goto-char (point-max))
+                        (cond ((or (eq channel ?e) (eq channel ?o))
+                               (insert (decode-coding-string (bindat-get-field (bindat-unpack `((f str ,(length data))) data) 'f) 'utf-8)))
+                              ((eq channel ?r)
+                               (setf (vc-hgcmd--command-result-code current-command) (bindat-get-field (bindat-unpack `((f u32)) data) 'f))
+                               (with-current-buffer buffer (setq vc-hgcmd--current-command nil))
+                               (let ((callback (vc-hgcmd--command-callback current-command))
+                                     (args (vc-hgcmd--command-callback-args current-command)))
+                                 (when callback
+                                   (if args (funcall callback args) (funcall callback)))))
+                              ;; TODO: cmdserver clients must handle I and L channels
+                              (t (error (format "unknown channel %c\n" channel)))))))
+                  t))))))))
 
 (defun vc-hgcmd--check-buffer-process (buffer)
   "Create hg cmdserver process in BUFFER if needed."
@@ -274,6 +273,7 @@ Insert output to process buffer and check if amount of data is enought to parse 
     (with-current-buffer buffer
       (setq default-directory dir)
       (vc-hgcmd-process-mode))
+    (vc-hgcmd--check-buffer-process buffer)
     buffer))
 
 (defun vc-hgcmd--get-process-buffer (dir)
@@ -283,11 +283,9 @@ Insert output to process buffer and check if amount of data is enought to parse 
 
 (defun vc-hgcmd--process-buffer ()
   "Get hg cmdserver process buffer for repo in `default-directory'."
-  (let* ((dir (vc-hgcmd--repo-dir))
-         (buffer (or (vc-hgcmd--get-process-buffer dir)
-                     (puthash dir (vc-hgcmd--create-process-buffer dir) vc-hgcmd--process-buffers-by-dir))))
-    (when buffer (vc-hgcmd--check-buffer-process buffer))
-    buffer))
+  (let* ((dir (vc-hgcmd--repo-dir)))
+    (or (vc-hgcmd--get-process-buffer dir)
+        (puthash dir (vc-hgcmd--create-process-buffer dir) vc-hgcmd--process-buffers-by-dir))))
 
 (defun vc-hgcmd--create-output-buffer (dir)
   "Create hg output buffer for repo in DIR."
