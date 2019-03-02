@@ -230,6 +230,13 @@ Insert output to process buffer and check if amount of data is enought to parse 
                               (t (error (format "unknown channel %c\n" channel)))))))
                   t))))))))
 
+(defun vc-hgcmd--cmdserver-process-sentinel (process _event)
+  "Will listen for PROCESS events and kill process buffer if process killed."
+  (unless (process-live-p process)
+    (let ((buffer (process-buffer process)))
+      (when (buffer-live-p buffer)
+        (kill-buffer buffer)))))
+
 (defun vc-hgcmd--check-buffer-process (buffer)
   "Create hg cmdserver process in BUFFER if needed."
   (unless (get-buffer-process buffer)
@@ -261,6 +268,7 @@ Insert output to process buffer and check if amount of data is enought to parse 
               ;; send \n after command data so tty process can read data
               (process-send-string process "runcommand\n")
               (set-process-filter process #'vc-hgcmd--cmdserver-process-filter)
+              (set-process-sentinel process #'vc-hgcmd--cmdserver-process-sentinel)
               process)))))))
 
 (defun vc-hgcmd--repo-dir ()
