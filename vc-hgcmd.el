@@ -5,7 +5,7 @@
 ;; Author: Andrii Kolomoiets <andreyk.mad@gmail.com>
 ;; Keywords: vc
 ;; URL: https://github.com/muffinmad/emacs-vc-hgcmd
-;; Package-Version: 1.3.3
+;; Package-Version: 1.3.4
 ;; Package-Requires: ((emacs "25.1"))
 
 ;; This file is NOT part of GNU Emacs.
@@ -227,7 +227,7 @@ Insert output to process buffer and check if amount of data is enought to parse 
                                  (when callback
                                    (if args (funcall callback args) (funcall callback)))))
                               ;; TODO: cmdserver clients must handle I and L channels
-                              (t (error (format "unknown channel %c\n" channel)))))))
+                              (t (error (format "unknown channel %c" channel)))))))
                   t))))))))
 
 (defun vc-hgcmd--cmdserver-process-sentinel (process _event)
@@ -265,8 +265,6 @@ Insert output to process buffer and check if amount of data is enought to parse 
             (while (and (process-live-p process) (not (vc-hgcmd--read-output)))
               (accept-process-output process 0.1 nil t))
             (when (process-live-p process)
-              ;; send \n after command data so tty process can read data
-              (process-send-string process "runcommand\n")
               (set-process-filter process #'vc-hgcmd--cmdserver-process-filter)
               (set-process-sentinel process #'vc-hgcmd--cmdserver-process-sentinel)
               process)))))))
@@ -343,8 +341,14 @@ Insert 'Running command' and display buffer text if COMMAND"
         (accept-process-output process 0.1 nil t))
       (when (process-live-p process)
         (setq vc-hgcmd--current-command cmd)
-        ;; send \n after command data so tty process can read data
-        (process-send-string process (concat (vc-hgcmd--prepare-command-to-send (vc-hgcmd--command-command cmd) (process-tty-name process)) "runcommand\n"))
+        (let ((tty (process-tty-name process)))
+          (process-send-string process
+                               (concat "runcommand\n"
+                                       (vc-hgcmd--prepare-command-to-send
+                                        (vc-hgcmd--command-command cmd) tty)))
+          ;; send eof after command data so tty process can read data
+          (when tty
+            (process-send-eof process)))
         (when (vc-hgcmd--command-wait cmd)
           (while vc-hgcmd--current-command
             (accept-process-output process 0.1 nil t)))
@@ -407,7 +411,7 @@ Insert 'Running command' and display buffer text if COMMAND"
 
 (defun vc-hgcmd--branches ()
   "Return branches list."
-  (split-string (vc-hgcmd-command "branches" "-T" "{branch}\n") "\n"))
+  (split-string (vc-hgcmd-command "branches" "-T" "{branch}\\n") "\n"))
 
 (defun vc-hgcmd--tags ()
   "Return tags list."
@@ -503,7 +507,7 @@ Insert 'Running command' and display buffer text if COMMAND"
 
 (defun vc-hgcmd-dir-extra-headers (_dir)
   "Return summary command for DIR output as dir extra headers."
-  (let* ((parents (vc-hgcmd-command "log" "-r" "p1()+p2()" "--template" "{rev}:{node|short}\\0{branch}\\0{tags}\\0{desc|firstline}\n"))
+  (let* ((parents (vc-hgcmd-command "log" "-r" "p1()+p2()" "--template" "{rev}:{node|short}\\0{branch}\\0{tags}\\0{desc|firstline}\\n"))
          (result (when parents
                    (apply #'concat (mapcar #'vc-hgcmd--parent-info (split-string parents "\n"))))))
     (with-temp-buffer
@@ -813,7 +817,7 @@ Insert 'Running command' and display buffer text if COMMAND"
 
 (defun vc-hgcmd--log-edit-default-message ()
   "Return 'merged ...' if there are two parents."
-  (let* ((parents (split-string (vc-hgcmd-command "log" "-r" "p1()+p2()" "--template" "{node}\\0{branch}\n") "\n"))
+  (let* ((parents (split-string (vc-hgcmd-command "log" "-r" "p1()+p2()" "--template" "{node}\\0{branch}\\n") "\n"))
          (p1 (car parents))
          (p2 (cadr parents)))
     (when p2
