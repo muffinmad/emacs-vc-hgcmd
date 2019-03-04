@@ -177,7 +177,7 @@ same branch was merged."
 
 (defvar vc-hgcmd--process-buffers-by-dir (make-hash-table :test #'equal))
 
-(cl-defstruct (vc-hgcmd--command (:copier nil)) command output-buffer result-code wait callback callback-args)
+(cl-defstruct (vc-hgcmd--command (:copier nil)) command output-buffer result-code wait callback callback-args show-buffer)
 
 (defvar-local vc-hgcmd--current-command nil
   "Current running hgcmd command. Future commands will wait until the current command will finish.")
@@ -301,27 +301,26 @@ Insert output to process buffer and check if amount of data is enought to parse 
       (vc-hgcmd-output-mode))
     buffer))
 
-(defun vc-hgcmd--get-output-buffer (&optional command)
-  "Get hg output buffer for repo in `default-directory'.
-Insert 'Running command' and display buffer text if COMMAND"
-  (let* ((dir (vc-hgcmd--repo-dir))
-         (buffer (or (seq-find (lambda (buffer)
-                                 (with-current-buffer buffer
-                                   (and (eq major-mode 'vc-hgcmd-output-mode)
-                                        (equal (abbreviate-file-name default-directory) dir))))
-                               (buffer-list))
-                     (vc-hgcmd--create-output-buffer dir)))
-         window-start)
-    (when command
-      (with-current-buffer buffer
-        (let ((inhibit-read-only t))
-          (goto-char (point-max))
-          (unless (eq (point) (point-min)) (insert "\n"))
-          (setq window-start (point))
-          (insert (concat "Running \"" (mapconcat #'identity command " ") "\"...\n"))))
-      (let ((window (display-buffer buffer)))
-        (when window (set-window-start window window-start))))
-    buffer))
+(defun vc-hgcmd--get-output-buffer ()
+  "Get hg output buffer for repo in `default-directory'."
+  (let ((dir (vc-hgcmd--repo-dir)))
+    (or (seq-find (lambda (buffer)
+                    (with-current-buffer buffer
+                      (and (eq major-mode 'vc-hgcmd-output-mode)
+                           (equal (abbreviate-file-name default-directory) dir))))
+                  (buffer-list))
+        (vc-hgcmd--create-output-buffer dir))))
+
+(defun vc-hgcmd--setup-output-buffer (command buffer)
+  "Insert 'Running COMMAND' and display BUFFER."
+  (let ((window (display-buffer buffer)))
+    (with-current-buffer buffer
+      (let ((inhibit-read-only t))
+        (goto-char (point-max))
+        (unless (eq (point) (point-min)) (insert "\n"))
+        (set-window-start window (point))
+        (insert (concat "Running \"" (mapconcat #'identity command " ") "\"...\n")))))
+  buffer)
 
 (defun vc-hgcmd--prepare-command-to-send (command tty)
   "Prepare COMMAND to send to hg process. Escape each character in binary data with ^V if TTY."
@@ -337,15 +336,20 @@ Insert 'Running command' and display buffer text if COMMAND"
   (let* ((buffer (vc-hgcmd--process-buffer))
          (process (get-buffer-process buffer)))
     (with-current-buffer buffer
-      (while vc-hgcmd--current-command
-        (accept-process-output process 0.1 nil t))
+      (when vc-hgcmd--current-command
+        (user-error "Hg command \"%s\" is active" (car (vc-hgcmd--command-command vc-hgcmd--current-command))))
       (when (process-live-p process)
         (setq vc-hgcmd--current-command cmd)
-        (let ((tty (process-tty-name process)))
+        (let ((output-buffer (vc-hgcmd--command-output-buffer cmd))
+              (tty (process-tty-name process))
+              (command (vc-hgcmd--command-command cmd)))
+          (when (and output-buffer
+                     (vc-hgcmd--command-show-buffer cmd))
+            (vc-hgcmd--setup-output-buffer command output-buffer))
           (process-send-string process
                                (concat "runcommand\n"
                                        (vc-hgcmd--prepare-command-to-send
-                                        (vc-hgcmd--command-command cmd) tty)))
+                                        command tty)))
           ;; send eof after command data so tty process can read data
           (when tty
             (process-send-eof process)))
@@ -362,7 +366,7 @@ Insert 'Running command' and display buffer text if COMMAND"
         (let ((result (string-trim-right (buffer-string))))
           ;; TODO min result code for each command that is not error
           (if (= (vc-hgcmd--command-result-code cmd) 255)
-              (with-current-buffer (vc-hgcmd--get-output-buffer command)
+              (with-current-buffer (vc-hgcmd--setup-output-buffer command (vc-hgcmd--get-output-buffer))
                 (goto-char (point-max))
                 (let ((inhibit-read-only t))
                   (insert (concat result "\n")))
@@ -390,7 +394,8 @@ Insert 'Running command' and display buffer text if COMMAND"
   (vc-hgcmd--run-command
    (make-vc-hgcmd--command
     :command command
-    :output-buffer (vc-hgcmd--get-output-buffer command)
+    :output-buffer (vc-hgcmd--get-output-buffer)
+    :show-buffer t
     :callback #'vc-hgcmd--update-callback
     :callback-args (current-buffer))))
 
