@@ -5,7 +5,7 @@
 ;; Author: Andrii Kolomoiets <andreyk.mad@gmail.com>
 ;; Keywords: vc
 ;; URL: https://github.com/muffinmad/emacs-vc-hgcmd
-;; Package-Version: 1.3.4
+;; Package-Version: 1.3.5
 ;; Package-Requires: ((emacs "25.1"))
 
 ;; This file is NOT part of GNU Emacs.
@@ -177,7 +177,7 @@ same branch was merged."
 
 (defvar vc-hgcmd--process-buffers-by-dir (make-hash-table :test #'equal))
 
-(cl-defstruct (vc-hgcmd--command (:copier nil)) command output-buffer result-code wait callback callback-args show-buffer)
+(cl-defstruct (vc-hgcmd--command (:copier nil)) command output-buffer result-code wait callback callback-args)
 
 (defvar-local vc-hgcmd--current-command nil
   "Current running hgcmd command. Future commands will wait until the current command will finish.")
@@ -207,27 +207,29 @@ Insert output to process buffer and check if amount of data is enought to parse 
       (with-current-buffer buffer
         (goto-char (point-max))
         (let ((inhibit-read-only t)) (insert output))
-        (let* ((current-command (or (with-current-buffer buffer vc-hgcmd--current-command)
-                                    (error "Hgcmd process output without command: %s" output))))
+        (let ((current-command (or vc-hgcmd--current-command
+                                   (error "Hgcmd process output without command: %s" output))))
           (while
               (let ((data (vc-hgcmd--read-output)))
                 (when data
                   (let ((channel (car data))
                         (data (cdr data)))
-                    (with-current-buffer (vc-hgcmd--command-output-buffer current-command)
-                      (let ((inhibit-read-only t))
-                        (goto-char (point-max))
-                        (cond ((or (eq channel ?e) (eq channel ?o))
-                               (insert (decode-coding-string (bindat-get-field (bindat-unpack `((f str ,(length data))) data) 'f) 'utf-8)))
-                              ((eq channel ?r)
-                               (setf (vc-hgcmd--command-result-code current-command) (bindat-get-field (bindat-unpack `((f u32)) data) 'f))
-                               (with-current-buffer buffer (setq vc-hgcmd--current-command nil))
-                               (let ((callback (vc-hgcmd--command-callback current-command))
-                                     (args (vc-hgcmd--command-callback-args current-command)))
-                                 (when callback
-                                   (if args (funcall callback args) (funcall callback)))))
-                              ;; TODO: cmdserver clients must handle I and L channels
-                              (t (error (format "unknown channel %c" channel)))))))
+                    (cond ((or (eq channel ?e) (eq channel ?o))
+                           (let ((output-buffer (vc-hgcmd--command-output-buffer current-command)))
+                             (when (or (stringp output-buffer) (buffer-live-p output-buffer))
+                               (with-current-buffer output-buffer
+                                 (let ((inhibit-read-only t))
+                                   (goto-char (point-max))
+                                   (insert (decode-coding-string (bindat-get-field (bindat-unpack `((f str ,(length data))) data) 'f) 'utf-8)))))))
+                          ((eq channel ?r)
+                           (setf (vc-hgcmd--command-result-code current-command) (bindat-get-field (bindat-unpack `((f u32)) data) 'f))
+                           (setq vc-hgcmd--current-command nil)
+                           (let ((callback (vc-hgcmd--command-callback current-command))
+                                 (args (vc-hgcmd--command-callback-args current-command)))
+                             (when callback
+                               (if args (funcall callback args) (funcall callback)))))
+                          ;; TODO: cmdserver clients must handle I and L channels
+                          (t (error (format "unknown channel %c" channel)))))
                   t))))))))
 
 (defun vc-hgcmd--cmdserver-process-sentinel (process _event)
@@ -237,23 +239,32 @@ Insert output to process buffer and check if amount of data is enought to parse 
       (when (buffer-live-p buffer)
         (kill-buffer buffer)))))
 
-(defun vc-hgcmd--check-buffer-process (buffer)
-  "Create hg cmdserver process in BUFFER if needed."
-  (unless (get-buffer-process buffer)
-    (let ((process-environment (append vc-hgcmd-cmdserver-process-environment process-environment))
-          (process-connection-type nil))
-      (with-current-buffer buffer
-        (let ((inhibit-read-only t))
-          (erase-buffer))
-        (let ((process
-               (condition-case nil
-                   (apply
-                    #'start-file-process
-                    (concat "vc-hgcmd process: " (vc-hgcmd--project-name default-directory))
-                    buffer
-                    vc-hgcmd-hg-executable
-                    vc-hgcmd-cmdserver-args)
-                 (error nil))))
+(defun vc-hgcmd--repo-dir ()
+  "Get repo dir."
+  (abbreviate-file-name (or (vc-hgcmd-root default-directory) default-directory)))
+
+(defun vc-hgcmd--process-buffer ()
+  "Get hg cmdserver process buffer for repo in `default-directory'."
+  (let ((dir (vc-hgcmd--repo-dir)))
+    (or
+     (let ((buffer (gethash dir vc-hgcmd--process-buffers-by-dir)))
+       (when (buffer-live-p buffer) buffer))
+     (puthash
+      dir
+      (with-current-buffer (generate-new-buffer (concat "*hgcmd process: " (vc-hgcmd--project-name dir) "*"))
+        (setq default-directory dir)
+        (vc-hgcmd-process-mode)
+        (let* ((process-environment (append vc-hgcmd-cmdserver-process-environment process-environment))
+               (process-connection-type nil)
+               (process
+                (condition-case nil
+                    (apply
+                     #'start-file-process
+                     (concat "vc-hgcmd process: " (vc-hgcmd--project-name default-directory))
+                     (current-buffer)
+                     vc-hgcmd-hg-executable
+                     vc-hgcmd-cmdserver-args)
+                  (error nil))))
           ;; process will be nil if hg executable not found
           (when (process-live-p process)
             (set-process-sentinel process #'ignore)
@@ -266,70 +277,32 @@ Insert output to process buffer and check if amount of data is enought to parse 
               (accept-process-output process 0.1 nil t))
             (when (process-live-p process)
               (set-process-filter process #'vc-hgcmd--cmdserver-process-filter)
-              (set-process-sentinel process #'vc-hgcmd--cmdserver-process-sentinel)
-              process)))))))
+              (set-process-sentinel process #'vc-hgcmd--cmdserver-process-sentinel))))
+        (current-buffer))
+     vc-hgcmd--process-buffers-by-dir))))
 
-(defun vc-hgcmd--repo-dir ()
-  "Get repo dir."
-  (abbreviate-file-name (or (vc-hgcmd-root default-directory) default-directory)))
-
-(defun vc-hgcmd--create-process-buffer (dir)
-  "Create hg cmdserver process buffer for repo in DIR."
-  (let ((buffer (generate-new-buffer (concat "*hgcmd process: " (vc-hgcmd--project-name dir) "*"))))
-    (with-current-buffer buffer
-      (setq default-directory dir)
-      (vc-hgcmd-process-mode))
-    (vc-hgcmd--check-buffer-process buffer)
+(defun vc-hgcmd--output-buffer (command)
+  "Get and display hg output buffer for COMMAND."
+  (let* ((dir (vc-hgcmd--repo-dir))
+         (buffer
+          (or (seq-find (lambda (buffer)
+                          (with-current-buffer buffer
+                            (and (eq major-mode 'vc-hgcmd-output-mode)
+                                 (equal (abbreviate-file-name default-directory) dir))))
+                        (buffer-list))
+              (let ((buffer (generate-new-buffer (concat "*hgcmd output: " (vc-hgcmd--project-name dir) "*"))))
+                (with-current-buffer buffer
+                  (setq default-directory dir)
+                  (vc-hgcmd-output-mode))
+                buffer))))
+    (let ((window (display-buffer buffer)))
+      (with-current-buffer buffer
+        (let ((inhibit-read-only t))
+          (goto-char (point-max))
+          (unless (eq (point) (point-min)) (insert "\n"))
+          (set-window-start window (point))
+          (insert (concat "Running \"" (mapconcat #'identity command " ") "\"...\n")))))
     buffer))
-
-(defun vc-hgcmd--get-process-buffer (dir)
-  "Get hg cmdserver process buffer for repo in DIR."
-  (let ((buffer (gethash dir vc-hgcmd--process-buffers-by-dir)))
-    (when (buffer-live-p buffer) buffer)))
-
-(defun vc-hgcmd--process-buffer ()
-  "Get hg cmdserver process buffer for repo in `default-directory'."
-  (let* ((dir (vc-hgcmd--repo-dir)))
-    (or (vc-hgcmd--get-process-buffer dir)
-        (puthash dir (vc-hgcmd--create-process-buffer dir) vc-hgcmd--process-buffers-by-dir))))
-
-(defun vc-hgcmd--create-output-buffer (dir)
-  "Create hg output buffer for repo in DIR."
-  (let ((buffer (generate-new-buffer (concat "*hgcmd output: " (vc-hgcmd--project-name dir) "*"))))
-    (with-current-buffer buffer
-      (setq default-directory dir)
-      (vc-hgcmd-output-mode))
-    buffer))
-
-(defun vc-hgcmd--get-output-buffer ()
-  "Get hg output buffer for repo in `default-directory'."
-  (let ((dir (vc-hgcmd--repo-dir)))
-    (or (seq-find (lambda (buffer)
-                    (with-current-buffer buffer
-                      (and (eq major-mode 'vc-hgcmd-output-mode)
-                           (equal (abbreviate-file-name default-directory) dir))))
-                  (buffer-list))
-        (vc-hgcmd--create-output-buffer dir))))
-
-(defun vc-hgcmd--setup-output-buffer (command buffer)
-  "Insert 'Running COMMAND' and display BUFFER."
-  (let ((window (display-buffer buffer)))
-    (with-current-buffer buffer
-      (let ((inhibit-read-only t))
-        (goto-char (point-max))
-        (unless (eq (point) (point-min)) (insert "\n"))
-        (set-window-start window (point))
-        (insert (concat "Running \"" (mapconcat #'identity command " ") "\"...\n")))))
-  buffer)
-
-(defun vc-hgcmd--prepare-command-to-send (command tty)
-  "Prepare COMMAND to send to hg process. Escape each character in binary data with ^V if TTY."
-  (let* ((args (mapconcat #'identity command "\0"))
-         (binary-data (bindat-pack '((l u32)) `((l . ,(length args))))))
-    (concat (if tty
-                (mapconcat #'identity (mapcar (lambda (c) (concat "\x16" (char-to-string c))) binary-data) "")
-              binary-data)
-            args)))
 
 (defun vc-hgcmd--run-command (cmd)
   "Run hg CMD."
@@ -339,18 +312,19 @@ Insert output to process buffer and check if amount of data is enought to parse 
       (when vc-hgcmd--current-command
         (user-error "Hg command \"%s\" is active" (car (vc-hgcmd--command-command vc-hgcmd--current-command))))
       (when (process-live-p process)
-        (setq vc-hgcmd--current-command cmd)
-        (let ((output-buffer (vc-hgcmd--command-output-buffer cmd))
-              (tty (process-tty-name process))
+        (let ((tty (process-tty-name process))
               (command (vc-hgcmd--command-command cmd)))
-          (when (and output-buffer
-                     (vc-hgcmd--command-show-buffer cmd))
-            (vc-hgcmd--setup-output-buffer command output-buffer))
-          (process-send-string process
-                               (concat "runcommand\n"
-                                       (vc-hgcmd--prepare-command-to-send
-                                        command tty)))
-          ;; send eof after command data so tty process can read data
+          (setq vc-hgcmd--current-command cmd)
+          (process-send-string
+           process
+           (concat
+            "runcommand\n"
+            (let* ((args (mapconcat #'identity command "\0"))
+                   (binary-data (bindat-pack '((l u32)) `((l . ,(length args))))))
+              (concat (if tty
+                          (mapconcat #'identity (mapcar (lambda (c) (concat "\x16" (char-to-string c))) binary-data) "")
+                        binary-data)
+                      args))))
           (when tty
             (process-send-eof process)))
         (when (vc-hgcmd--command-wait cmd)
@@ -366,7 +340,7 @@ Insert output to process buffer and check if amount of data is enought to parse 
         (let ((result (string-trim-right (buffer-string))))
           ;; TODO min result code for each command that is not error
           (if (= (vc-hgcmd--command-result-code cmd) 255)
-              (with-current-buffer (vc-hgcmd--setup-output-buffer command (vc-hgcmd--get-output-buffer))
+              (with-current-buffer (vc-hgcmd--output-buffer command)
                 (goto-char (point-max))
                 (let ((inhibit-read-only t))
                   (insert (concat result "\n")))
@@ -374,7 +348,7 @@ Insert output to process buffer and check if amount of data is enought to parse 
             (when (> (length result) 0)
               result)))))))
 
-(defun vc-hgcmd-command-output-buffer (buffer &rest command)
+(defun vc-hgcmd-command-to-buffer (buffer &rest command)
   "Send output of COMMAND to BUFFER and wait COMMAND to finish."
   (vc-setup-buffer buffer)
   (vc-hgcmd--run-command (make-vc-hgcmd--command :command command :output-buffer buffer :wait t)))
@@ -390,12 +364,11 @@ Insert output to process buffer and check if amount of data is enought to parse 
         (revert-buffer))))))
 
 (defun vc-hgcmd-command-update-callback (command)
-  "Run COMMAND and update current buffer afret command finished."
+  "Run COMMAND and update current buffer after command finished."
   (vc-hgcmd--run-command
    (make-vc-hgcmd--command
     :command command
-    :output-buffer (vc-hgcmd--get-output-buffer)
-    :show-buffer t
+    :output-buffer (vc-hgcmd--output-buffer command)
     :callback #'vc-hgcmd--update-callback
     :callback-args (current-buffer))))
 
@@ -516,14 +489,14 @@ Insert output to process buffer and check if amount of data is enought to parse 
          (result (when parents
                    (apply #'concat (mapcar #'vc-hgcmd--parent-info (split-string parents "\n"))))))
     (with-temp-buffer
-      (vc-hgcmd-command-output-buffer (current-buffer) "summary")
-      (concat result
-              (unless parents
-                (vc-hgcmd--summary-info "parent" "Parent     : "))
-              (vc-hgcmd--summary-info "branch" "Branch     : ")
-              (vc-hgcmd--summary-info "commit" "Commit     : ")
-              (vc-hgcmd--summary-info "update" "Update     : ")
-              (vc-hgcmd--summary-info "phases" "Phases     : ")))))
+      (when (vc-hgcmd--run-command (make-vc-hgcmd--command :command (list "summary") :output-buffer (current-buffer) :wait t))
+        (concat result
+                (unless parents
+                  (vc-hgcmd--summary-info "parent" "Parent     : "))
+                (vc-hgcmd--summary-info "branch" "Branch     : ")
+                (vc-hgcmd--summary-info "commit" "Commit     : ")
+                (vc-hgcmd--summary-info "update" "Update     : ")
+                (vc-hgcmd--summary-info "phases" "Phases     : "))))))
 
 ;; TODO dir-printer
 ;; TODO status-fileinfo-extra
@@ -622,7 +595,7 @@ Insert output to process buffer and check if amount of data is enought to parse 
 (defun vc-hgcmd-find-revision (file rev buffer)
   "Put REV of FILE to BUFFER."
   (let ((file (vc-hgcmd--file-relative-name file)))
-    (apply #'vc-hgcmd-command-output-buffer buffer (if rev (list "cat" "-r" rev file) (list "cat" file)))))
+    (apply #'vc-hgcmd-command-to-buffer buffer (if rev (list "cat" "-r" rev file) (list "cat" file)))))
 
 (defun vc-hgcmd-checkout (file &optional rev)
   "Retrieve revision REV of FILE."
@@ -676,7 +649,7 @@ Insert output to process buffer and check if amount of data is enought to parse 
     ;; If limit is 1 or vc-log-show-limit then it is initial diff and better move to working revision
     ;; otherwise remember point position and restore it later
     (let ((p (with-current-buffer buffer (unless (or (member limit (list 1 vc-log-show-limit))) (point)))))
-      (apply #'vc-hgcmd-command-output-buffer buffer command)
+      (apply #'vc-hgcmd-command-to-buffer buffer command)
       (with-current-buffer buffer
         (if p
             (goto-char p)
@@ -684,7 +657,7 @@ Insert output to process buffer and check if amount of data is enought to parse 
 
 (defun vc-hgcmd--log-in-or-out (type buffer remote-location)
   "Log TYPE changesets for REMOTE-LOCATION to BUFFER."
-  (apply #'vc-hgcmd-command-output-buffer buffer type (unless (string= "" remote-location) remote-location)))
+  (apply #'vc-hgcmd-command-to-buffer buffer type (unless (string= "" remote-location) remote-location)))
 
 
 (defun vc-hgcmd-log-outgoing (buffer remote-location)
@@ -740,7 +713,7 @@ Insert output to process buffer and check if amount of data is enought to parse 
                   (when rev1 (list "-r" rev1))
                   (when rev2 (list "-r" rev2))
                   (unless (equal files (list default-directory)) (mapcar #'vc-hgcmd--file-relative-name files)))))
-    (apply #'vc-hgcmd-command-output-buffer buffer command)))
+    (apply #'vc-hgcmd-command-to-buffer buffer command)))
 
 (defun vc-hgcmd-revision-completion-table (_files)
   "Return branches and tags as they are more usefull than file revisions."
@@ -758,7 +731,7 @@ Insert output to process buffer and check if amount of data is enought to parse 
 
 (defun vc-hgcmd-annotate-command (file buffer &optional revision)
   "Annotate REVISION of FILE to BUFFER."
-  (apply #'vc-hgcmd-command-output-buffer buffer
+  (apply #'vc-hgcmd-command-to-buffer buffer
          (nconc
           (list "annotate" "-qdnuf")
           (when revision (list "-r" revision))
