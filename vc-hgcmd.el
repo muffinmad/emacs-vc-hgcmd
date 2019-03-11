@@ -5,7 +5,7 @@
 ;; Author: Andrii Kolomoiets <andreyk.mad@gmail.com>
 ;; Keywords: vc
 ;; URL: https://github.com/muffinmad/emacs-vc-hgcmd
-;; Package-Version: 1.3.5
+;; Package-Version: 1.3.6
 ;; Package-Requires: ((emacs "25.1"))
 
 ;; This file is NOT part of GNU Emacs.
@@ -224,10 +224,12 @@ Insert output to process buffer and check if amount of data is enought to parse 
                           ((eq channel ?r)
                            (setf (vc-hgcmd--command-result-code current-command) (bindat-get-field (bindat-unpack `((f u32)) data) 'f))
                            (setq vc-hgcmd--current-command nil)
-                           (let ((callback (vc-hgcmd--command-callback current-command))
+                           (let ((output-buffer (vc-hgcmd--command-output-buffer current-command))
+                                 (callback (vc-hgcmd--command-callback current-command))
                                  (args (vc-hgcmd--command-callback-args current-command)))
-                             (when callback
-                               (if args (funcall callback args) (funcall callback)))))
+                             (when (and callback (or (stringp output-buffer) (buffer-live-p output-buffer)))
+                               (with-current-buffer output-buffer
+                                 (if args (funcall callback args) (funcall callback))))))
                           ;; TODO: cmdserver clients must handle I and L channels
                           (t (error (format "unknown channel %c" channel)))))
                   t))))))))
