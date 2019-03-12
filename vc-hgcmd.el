@@ -5,7 +5,7 @@
 ;; Author: Andrii Kolomoiets <andreyk.mad@gmail.com>
 ;; Keywords: vc
 ;; URL: https://github.com/muffinmad/emacs-vc-hgcmd
-;; Package-Version: 1.3.6
+;; Package-Version: 1.3.7
 ;; Package-Requires: ((emacs "25.1"))
 
 ;; This file is NOT part of GNU Emacs.
@@ -610,8 +610,7 @@ Insert output to process buffer and check if amount of data is enought to parse 
 
 (defun vc-hgcmd-merge-branch ()
   "Merge."
-  (let* ((completion-fun (if (and (boundp 'ido-mode) ido-mode) #'ido-completing-read #'completing-read))
-         (branch (funcall completion-fun "Merge from branch: " (nconc (list "") (vc-hgcmd--branches) (vc-hgcmd--tags)))))
+  (let ((branch (completing-read "Merge from branch: " (vc-hgcmd-revision-completion-table))))
     (vc-hgcmd-command-update-callback
      (if (> (length branch) 0)
          (list "merge" branch)
@@ -717,9 +716,9 @@ Insert output to process buffer and check if amount of data is enought to parse 
                   (unless (equal files (list default-directory)) (mapcar #'vc-hgcmd--file-relative-name files)))))
     (apply #'vc-hgcmd-command-to-buffer buffer command)))
 
-(defun vc-hgcmd-revision-completion-table (_files)
+(defun vc-hgcmd-revision-completion-table (&optional _files)
   "Return branches and tags as they are more usefull than file revisions."
-  (letrec ((table (lazy-completion-table table (lambda () (nconc (vc-hgcmd--branches) (vc-hgcmd--tags))))))))
+  (letrec ((table (lazy-completion-table table (lambda () (nconc (list "") (vc-hgcmd--branches) (vc-hgcmd--tags))))))))
 
 (defconst vc-hgcmd-annotate-re
   (concat
