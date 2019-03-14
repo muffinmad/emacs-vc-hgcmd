@@ -5,7 +5,7 @@
 ;; Author: Andrii Kolomoiets <andreyk.mad@gmail.com>
 ;; Keywords: vc
 ;; URL: https://github.com/muffinmad/emacs-vc-hgcmd
-;; Package-Version: 1.3.7
+;; Package-Version: 1.3.8
 ;; Package-Requires: ((emacs "25.1"))
 
 ;; This file is NOT part of GNU Emacs.
@@ -253,7 +253,7 @@ Insert output to process buffer and check if amount of data is enought to parse 
        (when (buffer-live-p buffer) buffer))
      (puthash
       dir
-      (with-current-buffer (generate-new-buffer (concat "*hgcmd process: " (vc-hgcmd--project-name dir) "*"))
+      (with-current-buffer (generate-new-buffer (concat " *hgcmd process: " (vc-hgcmd--project-name dir) "*"))
         (setq default-directory dir)
         (vc-hgcmd-process-mode)
         (let* ((process-environment (append vc-hgcmd-cmdserver-process-environment process-environment))
