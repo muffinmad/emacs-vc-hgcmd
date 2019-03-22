@@ -5,7 +5,7 @@
 ;; Author: Andrii Kolomoiets <andreyk.mad@gmail.com>
 ;; Keywords: vc
 ;; URL: https://github.com/muffinmad/emacs-vc-hgcmd
-;; Package-Version: 1.3.9
+;; Package-Version: 1.3.10
 ;; Package-Requires: ((emacs "25.1"))
 
 ;; This file is NOT part of GNU Emacs.
@@ -193,7 +193,7 @@ same branch was merged."
   ;; So let's find '<channel><length>' pattern first and all output before it send to 'o' channel.
   ;; Suppose that length value will be less 2 ** 24 so there are always be \0 after channel.
   (goto-char 1)
-  (when (search-forward-regexp "[oedrLI]\0..." nil t)
+  (when (search-forward-regexp "[oedrLI]\0\\(.\\|\n\\)\\{3\\}" nil t)
     (if (> (point) 6)
         (let ((data (decode-coding-string (buffer-substring-no-properties 1 (- (point) 5)) 'utf-8))
               (inhibit-read-only t))
@@ -305,7 +305,7 @@ Insert output to process buffer and check if amount of data is enought to parse 
               (set-process-filter process #'vc-hgcmd--cmdserver-process-filter)
               (set-process-sentinel process #'vc-hgcmd--cmdserver-process-sentinel))))
         (current-buffer))
-     vc-hgcmd--process-buffers-by-dir))))
+      vc-hgcmd--process-buffers-by-dir))))
 
 (defun vc-hgcmd--output-buffer (command)
   "Get and display hg output buffer for COMMAND."
