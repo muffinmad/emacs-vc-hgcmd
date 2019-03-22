@@ -5,7 +5,7 @@
 ;; Author: Andrii Kolomoiets <andreyk.mad@gmail.com>
 ;; Keywords: vc
 ;; URL: https://github.com/muffinmad/emacs-vc-hgcmd
-;; Package-Version: 1.3.8
+;; Package-Version: 1.3.9
 ;; Package-Requires: ((emacs "25.1"))
 
 ;; This file is NOT part of GNU Emacs.
@@ -189,15 +189,33 @@ same branch was merged."
 
 (defun vc-hgcmd--read-output ()
   "Parse process output in current buffer."
-  (when (> (point-max) 5)
-    (let* ((data (bindat-unpack '((c byte) (d u32)) (vconcat (buffer-substring-no-properties 1 6))))
-           (channel (bindat-get-field data 'c))
-           (size (bindat-get-field data 'd)))
-      (when (> (point-max) (+ 5 size))
-        (let ((data (vconcat (buffer-substring-no-properties 6 (+ 6 size))))
+  ;; When some hg extension like hghooks 0.7.0 use 'print' then we will recieve output without channel.
+  ;; So let's find '<channel><length>' pattern first and all output before it send to 'o' channel.
+  ;; Suppose that length value will be less 2 ** 24 so there are always be \0 after channel.
+  (goto-char 1)
+  (when (search-forward-regexp "[oedrLI]\0..." nil t)
+    (if (> (point) 6)
+        (let ((data (decode-coding-string (buffer-substring-no-properties 1 (- (point) 5)) 'utf-8))
               (inhibit-read-only t))
-          (delete-region 1 (+ 6 size))
-          (cons channel data))))))
+          (delete-region 1 (- (point) 5))
+          (cons ?o data))
+      (let* ((data (bindat-unpack '((c byte) (d u32)) (vconcat (buffer-substring-no-properties 1 6))))
+             (channel (bindat-get-field data 'c))
+             (size (bindat-get-field data 'd)))
+        (cond ((memq channel '(?o ?e ?d ?r))
+               (when (> (point-max) (+ 5 size))
+                 (let ((data (vconcat (buffer-substring-no-properties 6 (+ 6 size))))
+                       (inhibit-read-only t))
+                   (delete-region 1 (+ 6 size))
+                   (cons channel (if (eq channel ?r)
+                                     (bindat-get-field (bindat-unpack `((f u32)) data) 'f)
+                                   (decode-coding-string
+                                    (bindat-get-field (bindat-unpack `((f str ,(length data))) data) 'f)
+                                    'utf-8))))))
+              ((memq channel '(?I ?L))
+               (let ((inhibit-read-only t))
+                 (delete-region 1 6))
+               (cons channel size)))))))
 
 (defun vc-hgcmd--cmdserver-process-filter (process output)
   "Filter OUTPUT for hg cmdserver PROCESS.
@@ -214,15 +232,15 @@ Insert output to process buffer and check if amount of data is enought to parse 
                 (when data
                   (let ((channel (car data))
                         (data (cdr data)))
-                    (cond ((or (eq channel ?e) (eq channel ?o))
+                    (cond ((memq channel '(?o ?e ?d))
                            (let ((output-buffer (vc-hgcmd--command-output-buffer current-command)))
                              (when (or (stringp output-buffer) (buffer-live-p output-buffer))
                                (with-current-buffer output-buffer
                                  (let ((inhibit-read-only t))
                                    (goto-char (point-max))
-                                   (insert (decode-coding-string (bindat-get-field (bindat-unpack `((f str ,(length data))) data) 'f) 'utf-8)))))))
+                                   (insert data))))))
                           ((eq channel ?r)
-                           (setf (vc-hgcmd--command-result-code current-command) (bindat-get-field (bindat-unpack `((f u32)) data) 'f))
+                           (setf (vc-hgcmd--command-result-code current-command) data)
                            (setq vc-hgcmd--current-command nil)
                            (let ((output-buffer (vc-hgcmd--command-output-buffer current-command))
                                  (callback (vc-hgcmd--command-callback current-command))
@@ -231,7 +249,7 @@ Insert output to process buffer and check if amount of data is enought to parse 
                                (with-current-buffer output-buffer
                                  (if args (funcall callback args) (funcall callback))))))
                           ;; TODO: cmdserver clients must handle I and L channels
-                          (t (error (format "unknown channel %c" channel)))))
+                          (t (error (format "Hgcmd unhandled channel %c" channel)))))
                   t))))))))
 
 (defun vc-hgcmd--cmdserver-process-sentinel (process _event)
@@ -239,6 +257,12 @@ Insert output to process buffer and check if amount of data is enought to parse 
   (unless (process-live-p process)
     (let ((buffer (process-buffer process)))
       (when (buffer-live-p buffer)
+        (with-current-buffer buffer
+          (when vc-hgcmd--current-command
+            ;; process has died but command waits for output
+            (vc-hgcmd--cmdserver-process-filter process (bindat-pack
+                                                         '((c byte) (l u32) (v u32))
+                                                         '((c . ?r) (l . 4) (v . 255))))))
         (kill-buffer buffer)))))
 
 (defun vc-hgcmd--repo-dir ()
@@ -306,6 +330,10 @@ Insert output to process buffer and check if amount of data is enought to parse 
           (insert (concat "Running \"" (mapconcat #'identity command " ") "\"...\n")))))
     buffer))
 
+(defun vc-hgcmd--encode-command-arg (arg)
+  "Encode command ARG."
+  (encode-coding-string arg 'utf-8))
+
 (defun vc-hgcmd--run-command (cmd)
   "Run hg CMD."
   (let* ((buffer (vc-hgcmd--process-buffer))
@@ -321,7 +349,7 @@ Insert output to process buffer and check if amount of data is enought to parse 
            process
            (concat
             "runcommand\n"
-            (let* ((args (mapconcat #'identity command "\0"))
+            (let* ((args (mapconcat #'vc-hgcmd--encode-command-arg command "\0"))
                    (binary-data (bindat-pack '((l u32)) `((l . ,(length args))))))
               (concat (if tty
                           (mapconcat #'identity (mapcar (lambda (c) (concat "\x16" (char-to-string c))) binary-data) "")
@@ -591,7 +619,7 @@ Insert output to process buffer and check if amount of data is enought to parse 
                                       ("Date" . "--date")
                                       ("Amend" . vc-hgcmd--arg-amend)
                                       ("Close-branch" . vc-hgcmd--arg-close-branch))
-                                    (encode-coding-string comment 'utf-8))
+                                    comment)
           (mapcar #'vc-hgcmd--file-relative-name files))))
 
 (defun vc-hgcmd-find-revision (file rev buffer)
