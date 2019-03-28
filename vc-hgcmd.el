@@ -478,15 +478,15 @@ Insert output to process buffer and check if amount of data is enought to parse 
 
 (defun vc-hgcmd--dir-status-callback (update-function)
   "Call UPDATE-FUNCTION with result of status command."
-  (let ((result nil)
-        (conflicted (vc-hgcmd-conflicted-files)))
+  (let* ((conflicted (vc-hgcmd-conflicted-files))
+         (result (mapcar (lambda (file)
+                           (list file 'conflict nil))
+                         conflicted)))
     (goto-char (point-min))
     (while (not (eobp))
-      (let* ((file (buffer-substring-no-properties (+ (point) 2) (line-end-position)))
-             (state (if (member file conflicted)
-                        'conflict
-                      (cdr (assoc (char-after) vc-hgcmd--translation-status)))))
-        (push (list file state nil) result))
+      (let ((file (buffer-substring-no-properties (+ (point) 2) (line-end-position))))
+        (unless (member file conflicted)
+          (push (list file (cdr (assoc (char-after) vc-hgcmd--translation-status)) nil) result)))
       (forward-line))
     (funcall update-function result)))
 
