@@ -5,7 +5,7 @@
 ;; Author: Andrii Kolomoiets <andreyk.mad@gmail.com>
 ;; Keywords: vc
 ;; URL: https://github.com/muffinmad/emacs-vc-hgcmd
-;; Package-Version: 1.3.11
+;; Package-Version: 1.3.12
 ;; Package-Requires: ((emacs "25.1"))
 
 ;; This file is NOT part of GNU Emacs.
@@ -85,6 +85,8 @@
 ;;
 ;;     (custom-set-variables
 ;;      '(vc-hgcmd-log-edit-message-function 'my/hg-commit-message))
+;;
+;; - Interactive command `vc-hgcmd-runcommand' that allow to run custom hg commands
 
 
 ;;; Code:
@@ -923,6 +925,11 @@ Insert output to process buffer and check if amount of data is enought to parse 
 (defun vc-hgcmd-find-ignore-file (file)
   "Return the ignore file of the repository of FILE."
   (expand-file-name ".hgignore" (vc-hgcmd-root file)))
+
+(defun vc-hgcmd-runcommand (command)
+  "Run custom hg COMMAND."
+  (interactive "sRun hg: ")
+  (vc-hgcmd-command-update-callback (split-string-and-unquote command)))
 
 (provide 'vc-hgcmd)
 

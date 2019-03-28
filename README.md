@@ -81,6 +81,10 @@ Additionally predefined commit message passed to custom function `vc-hgcmd-log-e
  '(vc-hgcmd-log-edit-message-function 'my/hg-commit-message))
 ```
 
+#### Run custom hg commands
+
+Interactive function `vc-hgcmd-runcommand` allow execute custom command.
+
 ## Installation
 
 `vc-hgcmd` available on [MELPA](http://melpa.org):
