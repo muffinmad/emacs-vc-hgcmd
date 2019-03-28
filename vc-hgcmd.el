@@ -246,9 +246,11 @@ Insert output to process buffer and check if amount of data is enought to parse 
                            (let ((output-buffer (vc-hgcmd--command-output-buffer current-command))
                                  (callback (vc-hgcmd--command-callback current-command))
                                  (args (vc-hgcmd--command-callback-args current-command)))
-                             (when (and callback (or (stringp output-buffer) (buffer-live-p output-buffer)))
+                             (when (or (stringp output-buffer) (buffer-live-p output-buffer))
                                (with-current-buffer output-buffer
-                                 (if args (funcall callback args) (funcall callback))))))
+                                 (setq mode-line-process nil)
+                                 (when callback
+                                   (if args (funcall callback args) (funcall callback)))))))
                           ;; TODO: cmdserver clients must handle I and L channels
                           (t (error (format "Hgcmd unhandled channel %c" channel)))))
                   t))))))))
@@ -344,8 +346,16 @@ Insert output to process buffer and check if amount of data is enought to parse 
         (user-error "Hg command \"%s\" is active" (car (vc-hgcmd--command-command vc-hgcmd--current-command))))
       (when (process-live-p process)
         (let ((tty (process-tty-name process))
-              (command (vc-hgcmd--command-command cmd)))
+              (command (vc-hgcmd--command-command cmd))
+              (output-buffer (vc-hgcmd--command-output-buffer cmd)))
           (setq vc-hgcmd--current-command cmd)
+          (when (or (stringp output-buffer) (buffer-live-p output-buffer))
+            (with-current-buffer output-buffer
+              (setq mode-line-process
+                    (propertize (format " [running %s...]" (car (vc-hgcmd--command-command cmd)))
+                                'face 'mode-line-emphasis
+                                'help-echo
+                                "A command is in progress in this buffer"))))
           (process-send-string
            process
            (concat
