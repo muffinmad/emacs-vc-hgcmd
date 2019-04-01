@@ -85,6 +85,10 @@ Additionally predefined commit message passed to custom function `vc-hgcmd-log-e
 
 Interactive function `vc-hgcmd-runcommand` allow execute custom command.
 
+#### Interactive
+
+It is possible to answer to hg questions, e.g. pick action during merge
+
 ## Installation
 
 `vc-hgcmd` available on [MELPA](http://melpa.org):

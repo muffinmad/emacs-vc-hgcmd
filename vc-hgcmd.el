@@ -5,7 +5,7 @@
 ;; Author: Andrii Kolomoiets <andreyk.mad@gmail.com>
 ;; Keywords: vc
 ;; URL: https://github.com/muffinmad/emacs-vc-hgcmd
-;; Package-Version: 1.3.13
+;; Package-Version: 1.4
 ;; Package-Requires: ((emacs "25.1"))
 
 ;; This file is NOT part of GNU Emacs.
@@ -87,6 +87,8 @@
 ;;      '(vc-hgcmd-log-edit-message-function 'my/hg-commit-message))
 ;;
 ;; - Interactive command `vc-hgcmd-runcommand' that allow to run custom hg commands
+;;
+;; - It is possible to answer to hg questions, e.g. pick action during merge
 
 
 ;;; Code:
@@ -111,6 +113,16 @@
   "Hg executable."
   :type '(string))
 
+(defcustom vc-hgcmd-cmdserver-config-options '("ui.interactive=True" "ui.editor=emacsclient -a emacs")
+  "Config options for command server.
+Specify options in form <option>=<value>. It will be passed to hg with --config argument."
+  :type '(repeat string))
+
+(defcustom vc-hgcmd-cmdserver-process-environment nil
+  "Environment variables for hg command server process.
+E.g. 'LANGUAGE=C'"
+  :type '(repeat string))
+
 (defcustom vc-hgcmd-pull-args "--update"
   "Arguments for pull command.
 This arguments will be used for each pull command.
@@ -131,32 +143,10 @@ same branch was merged."
           (const :tag "Default commit message" nil)))
 
 
-;;;; Consts. Customizing this can lead to unexpected behaviour
-
-
-(defconst vc-hgcmd-cmdserver-args
-  '(
-    ;; TODO: cmdserver clients must handle I and L channels
-    ;; "--config" "ui.interactive=True"
-    "--config" "ui.editor=emacsclient"
-    "--config" "pager.pager="
-    "serve"
-    "--cmdserver" "pipe")
-  "Args to start hg command server.")
-
-(defconst vc-hgcmd-cmdserver-process-environment
-  '("TERM=dumb"
-    "HGPLAIN="
-    "LANGUAGE=C"
-    "HGENCODING=UTF-8"
-    "ALTERNATE_EDITOR=emacs")
-  "Environment variables for hg command server process.")
-
-
 ;;;; Modes
 
 
-(define-derived-mode vc-hgcmd-process-mode fundamental-mode "Hgcmd process"
+(define-derived-mode vc-hgcmd-process-mode nil "Hgcmd process"
   "Major mode for hg cmdserver process"
   (hack-dir-local-variables-non-file-buffer)
   (set-buffer-multibyte nil)
@@ -165,13 +155,19 @@ same branch was merged."
    list-buffers-directory (abbreviate-file-name default-directory)
    buffer-read-only t))
 
-(define-derived-mode vc-hgcmd-output-mode compilation-mode "Hgcmd output"
+(defvar vc-hgcmd-output-mode-map
+  (let ((map (make-sparse-keymap)))
+    (set-keymap-parent map special-mode-map)
+    (define-key map "g" nil)
+    map))
+
+(define-derived-mode vc-hgcmd-output-mode special-mode "Hgcmd output"
   "Major mode for hg output"
   (hack-dir-local-variables-non-file-buffer)
+  (set (make-local-variable 'window-point-insertion-type) t)
   (setq
    buffer-undo-list t
-   list-buffers-directory (abbreviate-file-name default-directory)
-   buffer-read-only t))
+   list-buffers-directory (abbreviate-file-name default-directory)))
 
 
 ;;;; cmdserver communication
@@ -185,6 +181,10 @@ same branch was merged."
   "Current running hgcmd command. Future commands will wait until the current command will finish.")
 (put 'vc-hgcmd--current-command 'permanent-local t)
 
+(defvar-local vc-hgcmd--encoding 'utf-8
+  "Encoding that used for cmdserver communication.")
+(put 'vc-hgcmd--encoding 'permanent-local t)
+
 (defun vc-hgcmd--project-name (dir)
   "Get project name based on DIR."
   (file-name-nondirectory (directory-file-name dir)))
@@ -197,7 +197,7 @@ same branch was merged."
   (goto-char 1)
   (when (search-forward-regexp "[oedrLI]\0\\(.\\|\n\\)\\{3\\}" nil t)
     (if (> (point) 6)
-        (let ((data (decode-coding-string (buffer-substring-no-properties 1 (- (point) 5)) 'utf-8))
+        (let ((data (decode-coding-string (buffer-substring-no-properties 1 (- (point) 5)) vc-hgcmd--encoding))
               (inhibit-read-only t))
           (delete-region 1 (- (point) 5))
           (cons ?o data))
@@ -213,11 +213,15 @@ same branch was merged."
                                      (bindat-get-field (bindat-unpack `((f u32)) data) 'f)
                                    (decode-coding-string
                                     (bindat-get-field (bindat-unpack `((f str ,(length data))) data) 'f)
-                                    'utf-8))))))
+                                    vc-hgcmd--encoding))))))
               ((memq channel '(?I ?L))
                (let ((inhibit-read-only t))
                  (delete-region 1 6))
                (cons channel size)))))))
+
+(defun vc-hgcmd--data-for-tty (data)
+  "Prepare binary DATA to be sent to tty process."
+  (mapconcat #'identity (mapcar (lambda (c) (concat "\x16" (char-to-string c))) data) ""))
 
 (defun vc-hgcmd--cmdserver-process-filter (process output)
   "Filter OUTPUT for hg cmdserver PROCESS.
@@ -253,7 +257,32 @@ Insert output to process buffer and check if amount of data is enought to parse 
                                  (setq mode-line-process nil)
                                  (when callback
                                    (if args (funcall callback args) (funcall callback)))))))
-                          ;; TODO: cmdserver clients must handle I and L channels
+                          ((eq channel ?L)
+                           (let ((output-buffer (vc-hgcmd--command-output-buffer current-command)))
+                             (when (or (stringp output-buffer) (buffer-live-p output-buffer))
+                               (display-buffer output-buffer)
+                               (let ((tty (process-tty-name process))
+                                     (answer (let ((inhibit-quit t))
+                                               (prog1
+                                                   (with-local-quit
+                                                     (read-string "Hgcmd interactive input: "))
+                                                 (setq quit-flag nil)))))
+                                 (when answer
+                                   (with-current-buffer output-buffer
+                                     (let ((inhibit-read-only t))
+                                       (goto-char (point-max))
+                                       (insert answer "\n"))))
+                                 (when (process-live-p process)
+                                   (process-send-string
+                                    process
+                                    (let* ((to-send (when answer (concat (vc-hgcmd--encode-command-arg answer) "\n")))
+                                           (binary-data (concat (bindat-pack '((l u32)) `((l . ,(length to-send)))) to-send)))
+                                      (if tty
+                                          (vc-hgcmd--data-for-tty binary-data)
+                                        binary-data)))
+                                   (when tty
+                                     (process-send-eof process)))))))
+                          ;; What is I channel for?
                           (t (error (format "Hgcmd unhandled channel %c" channel)))))
                   t))))))))
 
@@ -294,7 +323,7 @@ Insert output to process buffer and check if amount of data is enought to parse 
                      (concat "vc-hgcmd process: " (vc-hgcmd--project-name default-directory))
                      (current-buffer)
                      vc-hgcmd-hg-executable
-                     vc-hgcmd-cmdserver-args)
+                     (nconc (mapcan (lambda (option) (list "--config" option)) vc-hgcmd-cmdserver-config-options) (list "serve" "--cmdserver" "pipe")))
                   (error nil))))
           ;; process will be nil if hg executable not found
           (when (process-live-p process)
@@ -304,11 +333,18 @@ Insert output to process buffer and check if amount of data is enought to parse 
             ;; read hello message
             ;; TODO parse encoding
             ;; check process again because it can be tramp sh process with output like "env: hg not found"
-            (while (and (process-live-p process) (not (vc-hgcmd--read-output)))
-              (accept-process-output process 0.1 nil t))
-            (when (process-live-p process)
-              (set-process-filter process #'vc-hgcmd--cmdserver-process-filter)
-              (set-process-sentinel process #'vc-hgcmd--cmdserver-process-sentinel))))
+            (let ((output (vc-hgcmd--read-output)))
+              (while (and (process-live-p process) (not output))
+                (accept-process-output process 0.1 nil t)
+                (setq output (vc-hgcmd--read-output)))
+              (when (process-live-p process)
+                (let* ((output (cdr output))
+                       (encoding (when (string-match "\\bencoding: \\(.+\\)" output)
+                                   (intern (downcase (match-string 1 output))))))
+                  (when encoding
+                    (setq vc-hgcmd--encoding (if (eq encoding 'ascii) 'us-ascii encoding))))
+                (set-process-filter process #'vc-hgcmd--cmdserver-process-filter)
+                (set-process-sentinel process #'vc-hgcmd--cmdserver-process-sentinel)))))
         (current-buffer))
       vc-hgcmd--process-buffers-by-dir))))
 
@@ -330,14 +366,14 @@ Insert output to process buffer and check if amount of data is enought to parse 
       (with-current-buffer buffer
         (let ((inhibit-read-only t))
           (goto-char (point-max))
-          (unless (eq (point) (point-min)) (insert "\n"))
+          (unless (eq (point) (point-min)) (insert "\f\n"))
           (set-window-start window (point))
           (insert (concat "Running \"" (mapconcat #'identity command " ") "\"...\n")))))
     buffer))
 
 (defun vc-hgcmd--encode-command-arg (arg)
   "Encode command ARG."
-  (encode-coding-string arg 'utf-8))
+  (encode-coding-string arg vc-hgcmd--encoding))
 
 (defun vc-hgcmd--run-command (cmd)
   "Run hg CMD."
@@ -366,7 +402,7 @@ Insert output to process buffer and check if amount of data is enought to parse 
             (let* ((args (mapconcat #'vc-hgcmd--encode-command-arg command "\0"))
                    (binary-data (bindat-pack '((l u32)) `((l . ,(length args))))))
               (concat (if tty
-                          (mapconcat #'identity (mapcar (lambda (c) (concat "\x16" (char-to-string c))) binary-data) "")
+                          (vc-hgcmd--data-for-tty binary-data)
                         binary-data)
                       args))))
           (when tty
