@@ -5,7 +5,7 @@
 ;; Author: Andrii Kolomoiets <andreyk.mad@gmail.com>
 ;; Keywords: vc
 ;; URL: https://github.com/muffinmad/emacs-vc-hgcmd
-;; Package-Version: 1.4
+;; Package-Version: 1.4.1
 ;; Package-Requires: ((emacs "25.1"))
 
 ;; This file is NOT part of GNU Emacs.
@@ -33,13 +33,12 @@
 ;;
 ;; Also there are some other improvements and differences:
 ;;
-;; - vc-hgcmd can't show file renames in `vc-dir' yet
-;;
 ;; - graph log is used for branch or root log
 ;;
-;; - Unresolved conflict status for a file
+;; - Conflict status for a file
 ;; Files with unresolved merge conflicts have appropriate status in `vc-dir'.
 ;; Also you can use `vc-find-conflicted-file' to find next file with unresolved merge conflict.
+;; Files with resolved merge conflicts have extra file info in `vc-dir'.
 ;;
 ;; - hg summary as `vc-dir' extra headers
 ;; hg summary command gives useful information about commit, update and phase states.
@@ -334,7 +333,7 @@ Insert output to process buffer and check if amount of data is enought to parse 
             ;; TODO parse encoding
             ;; check process again because it can be tramp sh process with output like "env: hg not found"
             (let ((output (vc-hgcmd--read-output)))
-              (while (and (process-live-p process) (not output))
+              (while (and (process-live-p process) (or (not output) (not (string-prefix-p "capabilities: " (cdr output)))))
                 (accept-process-output process 0.1 nil t)
                 (setq output (vc-hgcmd--read-output)))
               (when (process-live-p process)
@@ -472,7 +471,7 @@ Insert output to process buffer and check if amount of data is enought to parse 
 
 (defun vc-hgcmd--branches ()
   "Return branches list."
-  (split-string (vc-hgcmd-command "branches" "-T" "{branch}\\n") "\n"))
+  (split-string (vc-hgcmd-command "branches" "-q") "\n"))
 
 (defun vc-hgcmd--tags ()
   "Return tags list."
@@ -514,26 +513,70 @@ Insert output to process buffer and check if amount of data is enought to parse 
             'conflict
           state)))))
 
+(cl-defstruct (vc-hgcmd-extra-fileinfo
+               (:copier nil)
+               (:constructor vc-hgcmd-create-extra-fileinfo (status &optional origin))
+               (:conc-name vc-hgcmd-extra-fileinfo->))
+  status ;; copied, renamed or resolved
+  origin ;; origin file in case copied or renamed
+  )
+
+(defun vc-hgcmd-dir-printer (info)
+  "Pretty print INFO."
+  (vc-default-dir-printer 'Hgcmd info)
+  (let ((extra (vc-dir-fileinfo->extra info)))
+    (when extra
+      (insert (propertize
+               (format "   (%s)"
+                       (pcase (vc-hgcmd-extra-fileinfo->status extra)
+                         ('resolved "resolved conflict")
+                         ('copied (format "copied from %s" (vc-hgcmd-extra-fileinfo->origin extra)))
+                         ('renamed-from (format "renamed from %s" (vc-hgcmd-extra-fileinfo->origin extra)))
+                         ('renamed-to (format "renamed to %s" (vc-hgcmd-extra-fileinfo->origin extra)))))
+               'face 'font-lock-comment-face)))))
+
 (defun vc-hgcmd--dir-status-callback (update-function)
   "Call UPDATE-FUNCTION with result of status command."
   (let* ((conflicted (vc-hgcmd-conflicted-files))
          (result (mapcar (lambda (file)
-                           (list file 'conflict nil))
-                         conflicted)))
+                           (list (car file) (cdr file) (when (eq (cdr file) 'edited) (vc-hgcmd-create-extra-fileinfo 'resolved))))
+                         conflicted))
+         (conflicted (mapcar #'car conflicted)))
     (goto-char (point-min))
     (while (not (eobp))
-      (let ((file (buffer-substring-no-properties (+ (point) 2) (line-end-position))))
-        (unless (member file conflicted)
-          (push (list file (cdr (assoc (char-after) vc-hgcmd--translation-status)) nil) result)))
+      (let ((file (buffer-substring-no-properties (+ (point) 2) (line-end-position)))
+            (status (cdr (assoc (char-after) vc-hgcmd--translation-status))))
+        (unless (or (member file conflicted) (eq status 'origin))
+          (push (list
+                 file
+                 status
+                 (pcase status
+                   ('added (save-excursion
+                             (forward-line)
+                             (when (and (point-at-bol)
+                                        (eq 'origin (cdr (assoc (char-after) vc-hgcmd--translation-status))))
+                               (let ((origin (buffer-substring-no-properties (+ (point) 2) (line-end-position))))
+                                 (vc-hgcmd-create-extra-fileinfo
+                                  (if (re-search-forward (concat "^R " (regexp-quote origin) "$") nil t)
+                                      'renamed-from
+                                    'copied)
+                                  origin)))))
+                   ('removed (save-excursion
+                               (when (re-search-backward (concat "^  " (regexp-quote file) "$") nil t)
+                                 (forward-line -1)
+                                 (vc-hgcmd-create-extra-fileinfo
+                                  'renamed-to
+                                  (buffer-substring-no-properties (+ (point) 2) (line-end-position))))))
+                   ))
+                result)))
       (forward-line))
     (funcall update-function result)))
 
 (defun vc-hgcmd-dir-status-files (dir files update-function)
   "Call UPDATE-FUNCTION with status for files in DIR or FILES."
-  ;; TODO track file renames with -C option
   (let ((command (if files
                      (nconc (list "status" "-A") (mapcar #'vc-hgcmd--file-relative-name files))
-                   (list "status" (vc-hgcmd--file-relative-name dir)))))
+                   (list "status" "-C" (vc-hgcmd--file-relative-name dir)))))
     (vc-hgcmd--run-command
      (make-vc-hgcmd--command
       :command command
@@ -577,9 +620,6 @@ Insert output to process buffer and check if amount of data is enought to parse 
                 (vc-hgcmd--summary-info "commit" "Commit     : ")
                 (vc-hgcmd--summary-info "update" "Update     : ")
                 (vc-hgcmd--summary-info "phases" "Phases     : "))))))
-
-;; TODO dir-printer
-;; TODO status-fileinfo-extra
 
 (defun vc-hgcmd-working-revision (file)
   "Working revision. Return repository working revision if FILE is committed."
@@ -954,9 +994,17 @@ Insert output to process buffer and check if amount of data is enought to parse 
 ;; TODO extra-dir-menu. update -C for example or commit --close-branch or --amend without changes
 
 (defun vc-hgcmd-conflicted-files (&optional _dir)
-  "List of files where conflict resolution is needed."
-  (let ((out (vc-hgcmd-command "files" "set:unresolved()")))
-    (and out (split-string out "\n"))))
+  "List of files with conflict or resolved conflict."
+  (let (result)
+    (with-temp-buffer
+      (when (vc-hgcmd--run-command (make-vc-hgcmd--command :command (list "resolve" "--list") :output-buffer (current-buffer) :wait t))
+        (goto-char (point-min))
+        (while (not (eobp))
+          (let ((file (buffer-substring-no-properties (+ (point) 2) (line-end-position)))
+                (status (cdr (assoc (char-after) vc-hgcmd--translation-resolve))))
+            (push (cons file status) result))
+          (forward-line))
+        result))))
 
 (defun vc-hgcmd-find-ignore-file (file)
   "Return the ignore file of the repository of FILE."

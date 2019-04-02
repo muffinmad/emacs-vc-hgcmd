@@ -14,18 +14,16 @@ Because communicating with single `hg` process over pipe is much faster than sta
 
 ### Other improvements and differences
 
-#### File renames in dir status
-
-`vc-hgcmd` can't show file renames in `vc-dir` yet.
-
 #### Graph log
 
 Graph log is used when viewing branch or root log.
 
-#### Unresolved conflict status for a file
+#### Conflict status for a file
 
 Files with unresolved merge conflicts have appropriate status in `vc-dir`.
 Also you can use `vc-find-conflicted-file` to find next file with unresolved merge conflict.
+
+Files with resolved merge conflicts have extra file info in `vc-dir`.
 
 #### hg summary as `vc-dir` extra headers
 
