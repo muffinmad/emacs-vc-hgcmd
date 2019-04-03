@@ -5,7 +5,7 @@
 ;; Author: Andrii Kolomoiets <andreyk.mad@gmail.com>
 ;; Keywords: vc
 ;; URL: https://github.com/muffinmad/emacs-vc-hgcmd
-;; Package-Version: 1.4.1
+;; Package-Version: 1.5
 ;; Package-Requires: ((emacs "25.1"))
 
 ;; This file is NOT part of GNU Emacs.
@@ -88,7 +88,8 @@
 ;; - Interactive command `vc-hgcmd-runcommand' that allow to run custom hg commands
 ;;
 ;; - It is possible to answer to hg questions, e.g. pick action during merge
-
+;;
+;; - Option to display shelves in `vc-dir'
 
 ;;; Code:
 
@@ -141,6 +142,9 @@ same branch was merged."
           (function)
           (const :tag "Default commit message" nil)))
 
+(defcustom vc-hgcmd-dir-show-shelve nil
+  "Show current shelves in `vc-dir' buffer."
+  :type '(boolean))
 
 ;;;; Modes
 
@@ -606,20 +610,193 @@ Insert output to process buffer and check if amount of data is enought to parse 
   (when (search-forward-regexp (format "^%s: \\(.*\\)" search) nil t)
     (vc-hgcmd--extra-header name (match-string-no-properties 1))))
 
+(defvar vc-hgcmd-extra-menu-map
+  (let ((map (make-sparse-keymap)))
+    (define-key map [hgcmd-sl]
+      '(menu-item "Create shelve..." vc-hgcmd-shelve
+		          :help "Shelve changes"))
+    (define-key map [hgcmd-uc]
+      '(menu-item "Continue unshelve" vc-hgcmd-shelve-unshelve-continue
+		          :help "Continue unshelve"))
+    (define-key map [hgcmd-ua]
+      '(menu-item "Abort unshelve" vc-hgcmd-shelve-unshelve-abort
+		          :help "Abort unshelve"))
+    (define-key map [hgcmd-ar]
+      '(menu-item "Addremove" vc-hgcmd-addremove
+		          :help "Add new and remove missing files"))
+    map))
+
+(defun vc-hgcmd-extra-menu ()
+  "Return a menu keymap with additional hg commands."
+  vc-hgcmd-extra-menu-map)
+
+(defun vc-hgcmd-extra-status-menu ()
+  "Return a menu keymap with additional hg commands."
+  vc-hgcmd-extra-menu-map)
+
+(defvar vc-hgcmd-shelve-map
+  (let ((map (make-sparse-keymap)))
+    ;; Turn off vc-dir marking
+    (define-key map [mouse-2] 'ignore)
+
+    (define-key map [down-mouse-3] #'vc-hgcmd-shelve-menu)
+    (define-key map "\C-k" #'vc-hgcmd-shelve-delete-at-point)
+    (define-key map "=" #'vc-hgcmd-shelve-show-at-point)
+    (define-key map "\C-m" #'vc-hgcmd-shelve-show-at-point)
+    (define-key map "A" 'vc-hgcmd-shelve-apply-at-point)
+    (define-key map "P" 'vc-hgcmd-shelve-pop-at-point)
+    map))
+
+(defvar vc-hgcmd-shelve-menu-map
+  (let ((map (make-sparse-keymap "Hg shelve")))
+    (define-key map [de]
+      '(menu-item "Delete shelve" vc-hgcmd-shelve-delete-at-point
+		          :help "Delete the current shelve"))
+    (define-key map [ap]
+      '(menu-item "Unshelve and keep shelve" vc-hgcmd-shelve-apply-at-point
+		          :help "Apply the current shelve and keep it in the shelve list"))
+    (define-key map [po]
+      '(menu-item "Unshelve and remove shelve" vc-hgcmd-shelve-pop-at-point
+		          :help "Apply the current shelve and remove it"))
+    (define-key map [sh]
+      '(menu-item "Show shelve" vc-hgcmd-shelve-show-at-point
+		          :help "Show the contents of the current shelve"))
+    map))
+
 (defun vc-hgcmd-dir-extra-headers (_dir)
   "Return summary command for DIR output as dir extra headers."
   (let* ((parents (vc-hgcmd-command "log" "-r" "p1()+p2()" "--template" "{rev}:{node|short}\\0{branch}\\0{tags}\\0{desc|firstline}\\n"))
          (result (when parents
                    (apply #'concat (mapcar #'vc-hgcmd--parent-info (split-string parents "\n"))))))
-    (with-temp-buffer
-      (when (vc-hgcmd--run-command (make-vc-hgcmd--command :command (list "summary") :output-buffer (current-buffer) :wait t))
-        (concat result
-                (unless parents
-                  (vc-hgcmd--summary-info "parent" "Parent     : "))
-                (vc-hgcmd--summary-info "branch" "Branch     : ")
-                (vc-hgcmd--summary-info "commit" "Commit     : ")
-                (vc-hgcmd--summary-info "update" "Update     : ")
-                (vc-hgcmd--summary-info "phases" "Phases     : "))))))
+    (concat
+     result
+     (with-temp-buffer
+       (when (vc-hgcmd--run-command (make-vc-hgcmd--command :command (list "summary") :output-buffer (current-buffer) :wait t))
+         (concat
+          (unless parents
+            (vc-hgcmd--summary-info "parent" "Parent     : "))
+          (vc-hgcmd--summary-info "branch" "Branch     : ")
+          (vc-hgcmd--summary-info "commit" "Commit     : ")
+          (vc-hgcmd--summary-info "update" "Update     : ")
+          (vc-hgcmd--summary-info "phases" "Phases     : "))))
+     (when vc-hgcmd-dir-show-shelve
+       (let ((shelves (vc-hgcmd-shelve-list)))
+         (when shelves
+           (concat
+            (propertize "Shelve     :\n" 'face 'font-lock-type-face)
+            (with-temp-buffer
+              (when (vc-hgcmd--run-command (make-vc-hgcmd--command :command (list "shelve" "-l") :output-buffer (current-buffer) :wait t))
+                (goto-char (point-min))
+                (mapconcat
+                 (lambda (shelve)
+                   (prog1
+                       (propertize
+                        (concat
+                         "             "
+                         (propertize shelve 'face 'font-lock-variable-name-face)
+                         (propertize
+                          (replace-regexp-in-string
+                           (concat "^" (regexp-quote shelve) "\s*")
+                           "   "
+                           (buffer-substring-no-properties (line-beginning-position) (line-end-position)))
+                          'face 'font-lock-comment-face))
+                        'mouse-face 'highlight
+                        'help-echo "mouse-3: Show shelve menu\nRET: Show shelve\nA: Unshelve and keep\nP: Unshelve and remove\nC-k: Delete shelve"
+                        'keymap vc-hgcmd-shelve-map
+                        'vc-hgcmd--shelve-name shelve)
+                     (forward-line)))
+                 shelves "\n"))))))))))
+
+(defun vc-hgcmd-shelve-list ()
+  "Return shelve list."
+  (let ((shelves (vc-hgcmd-command "shelve" "-l" "-q")))
+    (when shelves (split-string shelves "\n"))))
+
+(defun vc-hgcmd-shelve-name-at-point ()
+  "Return shelve name at point."
+  (or (get-text-property (point) 'vc-hgcmd--shelve-name)
+      (error "Cannot find shelve at point")))
+
+(defun vc-hgcmd-shelve-delete-at-point ()
+  "Delete shelve at point."
+  (interactive)
+  (let ((shelve (vc-hgcmd-shelve-name-at-point)))
+    (when (y-or-n-p (format "Delete shelve %s? " shelve))
+      (vc-hgcmd-command "shelve" "-d" shelve)
+      (vc-dir-refresh))))
+
+(defun vc-hgcmd-shelve-read (prompt)
+  "Read shelve name with PROMPT."
+  (let ((name (completing-read prompt (letrec ((table (lazy-completion-table table (lambda () (vc-hgcmd-shelve-list)))))) nil t)))
+    (when (not (string-equal "" name))
+      name)))
+
+(defun vc-hgcmd-shelve-apply (name)
+  "Unshelve and keep shelve with NAME."
+  (interactive (list (vc-hgcmd-shelve-read "Apply and keep shelve: ")))
+  (when name
+    (vc-hgcmd-command "unshelve" "-k" name)
+    (vc-dir-refresh)))
+
+(defun vc-hgcmd-shelve-apply-at-point ()
+  "Unshelve and keep shelve at point."
+  (interactive)
+  (vc-hgcmd-shelve-apply (vc-hgcmd-shelve-name-at-point)))
+
+(defun vc-hgcmd-shelve-pop (name)
+  "Unshelve and keep shelve with NAME."
+  (interactive (list (vc-hgcmd-shelve-read "Apply and remove shelve: ")))
+  (when name
+    (vc-hgcmd-command "unshelve" name)
+    (vc-dir-refresh)))
+
+(defun vc-hgcmd-shelve-pop-at-point ()
+  "Unshelve and keep shelve at point."
+  (interactive)
+  (vc-hgcmd-shelve-pop (vc-hgcmd-shelve-name-at-point)))
+
+(defun vc-hgcmd-shelve-show-at-point ()
+  "Show shelve at point."
+  (interactive)
+  (let ((shelve (vc-hgcmd-shelve-name-at-point))
+        (buffer (get-buffer-create "*vc-hgcmd-shelve*")))
+    (vc-setup-buffer buffer)
+    (with-current-buffer
+        (when (vc-hgcmd--run-command (make-vc-hgcmd--command :command (list "shelve" "-p" shelve) :output-buffer (current-buffer) :wait t))
+          (diff-mode)
+          (setq buffer-read-only t)
+          (pop-to-buffer (current-buffer))))))
+
+(defun vc-hgcmd-shelve (name)
+  "Create shelve named NAME."
+  (interactive "sShelve name: ")
+  (if (string-equal "" name)
+      (vc-hgcmd-command "shelve")
+    (vc-hgcmd-command "shelve" "-n" name))
+  (vc-dir-refresh))
+
+(defun vc-hgcmd-shelve-unshelve-continue ()
+  "Continue unshelve."
+  (interactive)
+  (vc-hgcmd-command "unshelve" "--continue")
+  (vc-dir-refresh))
+
+(defun vc-hgcmd-shelve-unshelve-abort ()
+  "Abort unshelve."
+  (interactive)
+  (vc-hgcmd-command "unshelve" "--abort")
+  (vc-dir-refresh))
+
+(defun vc-hgcmd-shelve-menu (event)
+  "Popup shelve menu on EVENT."
+  (interactive "e")
+  (vc-dir-at-event event (popup-menu vc-hgcmd-shelve-menu-map event)))
+
+(defun vc-hgcmd-addremove ()
+  "Add new and remove missing files."
+  (interactive)
+  (vc-hgcmd-command "addremove")
+  (vc-dir-refresh))
 
 (defun vc-hgcmd-working-revision (file)
   "Working revision. Return repository working revision if FILE is committed."
