@@ -5,7 +5,7 @@
 ;; Author: Andrii Kolomoiets <andreyk.mad@gmail.com>
 ;; Keywords: vc
 ;; URL: https://github.com/muffinmad/emacs-vc-hgcmd
-;; Package-Version: 1.5
+;; Package-Version: 1.5.1
 ;; Package-Requires: ((emacs "25.1"))
 
 ;; This file is NOT part of GNU Emacs.
@@ -119,8 +119,7 @@ Specify options in form <option>=<value>. It will be passed to hg with --config 
   :type '(repeat string))
 
 (defcustom vc-hgcmd-cmdserver-process-environment nil
-  "Environment variables for hg command server process.
-E.g. 'LANGUAGE=C'"
+  "Environment variables for hg command server process."
   :type '(repeat string))
 
 (defcustom vc-hgcmd-pull-args "--update"
@@ -317,7 +316,7 @@ Insert output to process buffer and check if amount of data is enought to parse 
       (with-current-buffer (generate-new-buffer (concat " *hgcmd process: " (vc-hgcmd--project-name dir) "*"))
         (setq default-directory dir)
         (vc-hgcmd-process-mode)
-        (let* ((process-environment (append vc-hgcmd-cmdserver-process-environment process-environment))
+        (let* ((process-environment (append process-environment vc-hgcmd-cmdserver-process-environment '("LANGUAGE=C")))
                (process-connection-type nil)
                (process
                 (condition-case nil
