@@ -316,7 +316,7 @@ Insert output to process buffer and check if amount of data is enought to parse 
       (with-current-buffer (generate-new-buffer (concat " *hgcmd process: " (vc-hgcmd--project-name dir) "*"))
         (setq default-directory dir)
         (vc-hgcmd-process-mode)
-        (let* ((process-environment (append process-environment vc-hgcmd-cmdserver-process-environment '("LANGUAGE=C")))
+        (let* ((process-environment (append '("LANGUAGE=C") vc-hgcmd-cmdserver-process-environment process-environment))
                (process-connection-type nil)
                (process
                 (condition-case nil
