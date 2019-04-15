@@ -25,6 +25,75 @@
 
 ;;; Commentary:
 
+;; Functions implementation status
+;;
+;; FUNCTION NAME                                   STATUS
+;; BACKEND PROPERTIES
+;; * revision-granularity                          OK
+;; STATE-QUERYING FUNCTIONS
+;; * registered (file)                             OK
+;; * state (file)                                  OK
+;; - dir-status-files (dir files update-function)  OK
+;; - dir-extra-headers (dir)                       OK
+;; - dir-printer (fileinfo)                        OK
+;; - status-fileinfo-extra (file)                  OK
+;; * working-revision (file)                       OK
+;; * checkout-model (files)                        OK
+;; - mode-line-string (file)                       OK
+;; STATE-CHANGING FUNCTIONS
+;; * create-repo (backend)                         OK
+;; * register (files &optional comment)            OK
+;; - responsible-p (file)                          OK
+;; - receive-file (file rev)                       NO no specific actions
+;; - unregister (file)                             OK
+;; * checkin (files comment &optional rev)         OK
+;; * find-revision (file rev buffer)               OK
+;; * checkout (file &optional rev)                 OK
+;; * revert (file &optional contents-done)         OK
+;; - merge-file (file rev1 rev2)                   NO not needed
+;; - merge-branch ()                               OK
+;; - merge-news (file)                             NO not needed
+;; - pull (prompt)                                 OK
+;; - steal-lock (file &optional revision)          NO not needed
+;; - modify-change-comment (files rev comment)     NO hg can modify only last comment
+;; - mark-resolved (files)                         OK
+;; - find-admin-dir (file)                         NO is this .hg dir?
+;; HISTORY FUNCTIONS
+;; * print-log (files buffer &optional shortlog start-revision limit)  OK but graph log if shortlog
+;; * log-outgoing (backend remote-location)        OK
+;; * log-incoming (backend remote-location)        OK
+;; - log-view-mode ()                              OK
+;; - show-log-entry (revision)                     OK
+;; - comment-history (file)                        NO
+;; - update-changelog (files)                      NO
+;; * diff (files &optional rev1 rev2 buffer async) OK
+;; - revision-completion-table (files)             OK branches and tags instead of revisions
+;; - annotate-command (file buf &optional rev)     OK
+;; - annotate-time ()                              OK
+;; - annotate-current-time ()                      NO
+;; - annotate-extract-revision-at-line ()          OK
+;; - region-history (FILE BUFFER LFROM LTO)        NO --line-range option is experimental
+;; - region-history-mode ()                        NO
+;; - mergebase (rev1 &optional rev2)               TODO
+;; TAG SYSTEM
+;; - create-tag (dir name branchp)                 OK
+;; - retrieve-tag (dir name update)                OK
+;; MISCELLANEOUS
+;; - make-version-backups-p (file)                 NO
+;; - root (file)                                   OK
+;; - ignore (file &optional directory)             OK find-ignore-file
+;; - ignore-completion-table                       OK find-ignore-file
+;; - previous-revision (file rev)                  OK with no respect to FILE
+;; - next-revision (file rev)                      OK with no respect to FILE
+;; - log-edit-mode ()                              OK
+;; - check-headers ()                              NO
+;; - delete-file (file)                            OK
+;; - rename-file (old new)                         OK
+;; - find-file-hook ()                             OK
+;; - extra-menu ()                                 OK shelve, addremove
+;; - extra-dir-menu ()                             OK extra-status-menu same as extra-menu
+;; - conflicted-files (dir)                        OK with no respect to DIR
+;;
 ;; VC backend to work with hg repositories through hg command server.
 ;; https://www.mercurial-scm.org/wiki/CommandServer
 ;;
@@ -898,7 +967,7 @@ Insert output to process buffer and check if amount of data is enought to parse 
   (vc-hgcmd-find-revision file rev (or (get-file-buffer file) (current-buffer))))
 
 (defun vc-hgcmd-revert (file &optional contents-done)
-  "Refert FILE if not CONTENTS-DONE."
+  "Revert FILE if not CONTENTS-DONE."
   (unless contents-done
     (vc-hgcmd-command "revert" (vc-hgcmd--file-relative-name file))))
 
