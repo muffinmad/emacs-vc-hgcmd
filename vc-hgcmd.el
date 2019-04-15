@@ -180,7 +180,7 @@ same branch was merged."
 (cl-defstruct (vc-hgcmd--command (:copier nil)) command output-buffer skip-error result-code wait callback callback-args)
 
 (defvar-local vc-hgcmd--current-command nil
-  "Current running hgcmd command. Future commands will wait until the current command will finish.")
+  "Current running hgcmd command.")
 (put 'vc-hgcmd--current-command 'permanent-local t)
 
 (defvar-local vc-hgcmd--encoding 'utf-8
