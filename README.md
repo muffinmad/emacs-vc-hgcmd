@@ -57,7 +57,7 @@ You can specify `-C` to run `hg update` with `-C` flag and discard all uncommitt
 They are mostly useless in annotate buffer.
 To find out right filename to annotate `vc-hgcmd` uses `status --rev <rev> -C file`.
 
-### `previous-revision` and `next-revision` respect files
+#### `previous-revision` and `next-revision` respect files
 
 Keys `p` and `n` in annotation buffer works correctly.
 
