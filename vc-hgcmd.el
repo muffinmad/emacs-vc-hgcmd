@@ -5,7 +5,7 @@
 ;; Author: Andrii Kolomoiets <andreyk.mad@gmail.com>
 ;; Keywords: vc
 ;; URL: https://github.com/muffinmad/emacs-vc-hgcmd
-;; Package-Version: 1.5.2
+;; Package-Version: 1.6
 ;; Package-Requires: ((emacs "25.1"))
 
 ;; This file is NOT part of GNU Emacs.
@@ -83,8 +83,8 @@
 ;; - root (file)                                   OK
 ;; - ignore (file &optional directory)             OK find-ignore-file
 ;; - ignore-completion-table                       OK find-ignore-file
-;; - previous-revision (file rev)                  OK with no respect to FILE
-;; - next-revision (file rev)                      OK with no respect to FILE
+;; - previous-revision (file rev)                  OK
+;; - next-revision (file rev)                      OK
 ;; - log-edit-mode ()                              OK
 ;; - check-headers ()                              NO
 ;; - delete-file (file)                            OK
@@ -130,9 +130,12 @@
 ;; It's very useful on `vc-retrieve-tag'.
 ;; You can specify -C to run hg update with -C flag and discard all uncommitted changes.
 ;;
-;; - Filenames in vc-annotate buffer are hidden
-;; They are needed to annotate changes across renames but mostly useless in annotate buffer.
-;; vc-hgcmd removes it from annotate buffer but keep it in text properties.
+;; - Filenames in vc-annotate buffer is omitted
+;; They are mostly useless in annotate buffer.
+;; To find out right filename to annotate vc-hgcmd uses `status --rev <rev> -C file'.
+;;
+;; - `previous-revision' and `next-revision' respect files
+;; Keys `p' and `n' in annotation buffer works correctly.
 ;;
 ;; - Create tag
 ;; vc-hgcmd creates tag on `vc-create-tag'
@@ -867,10 +870,16 @@ Insert output to process buffer and check if amount of data is enought to parse 
   (vc-dir-refresh))
 
 (defun vc-hgcmd-working-revision (file)
-  "Working revision. Return repository working revision if FILE is committed."
-  (if (and file (eq 'added (vc-state file)))
-      "0"
-    (or (vc-hgcmd-command "log" "-l" "1" "-f" "-T" "{rev}") "0")))
+  "Working revision of FILE. Result is revision of FILE up to repository revision."
+  (let* ((reporev (string-trim-right (vc-hgcmd-command "id" "-n") "+"))
+         (filerev (when file
+                    (vc-hgcmd-command
+                     "log"
+                     "-r" (format "limit(reverse(follow('%s') and ..%s), 1)"
+                                  (vc-hgcmd--file-relative-name file)
+                                  reporev)
+                     "--template" "{rev}"))))
+    (or filerev reporev)))
 
 (defun vc-hgcmd-checkout-model (_files)
   "Files are always writable."
@@ -1008,8 +1017,11 @@ Insert output to process buffer and check if amount of data is enought to parse 
             ;; start revision is used for branch log or specific revision log when limit is 1
             (list (if (eq limit 1) "-r" "-b") start-revision))
           (when limit (list "-l" (number-to-string limit)))
-          (unless (or shortlog (eq limit 1)) (list "-f")) ; follow file renames
-          (unless (equal files (list default-directory)) (mapcar #'vc-hgcmd--file-relative-name files)))))
+          ;; file list not needed if limit is 1
+          (unless (eq limit 1)
+            (nconc
+             (unless shortlog (list "-f")) ; follow file renames
+             (unless (equal files (list default-directory)) (mapcar #'vc-hgcmd--file-relative-name files)))))))
     ;; If limit is 1 or vc-log-show-limit then it is initial diff and better move to working revision
     ;; otherwise remember point position and restore it later
     (let ((p (with-current-buffer buffer (unless (or (member limit (list 1 vc-log-show-limit))) (point)))))
@@ -1063,12 +1075,14 @@ Insert output to process buffer and check if amount of data is enought to parse 
 (defun vc-hgcmd-show-log-entry (revision)
   "Show log entry positioning on REVISION."
   ;; REVISION might be branch name while print-branch-log
-  ;; if 'changeset: revision' not found try move to working rev
+  ;; if 'changeset: revision' not found try move to working rev but return nil
+  ;; because revision is not found
   (goto-char (point-min))
   (if (search-forward-regexp (format vc-hgcmd--message-re revision) nil t)
       (goto-char (match-beginning 0))
     (when (search-forward-regexp (format vc-hgcmd--message-re (vc-hgcmd-working-revision nil)) nil t)
-      (goto-char (match-beginning 0)))))
+      (goto-char (match-beginning 0))
+      nil)))
 
 (defun vc-hgcmd-diff (files &optional rev1 rev2 buffer _async)
   "Place diff of FILES between REV1 and REV2 into BUFFER."
@@ -1086,31 +1100,25 @@ Insert output to process buffer and check if amount of data is enought to parse 
 (defconst vc-hgcmd-annotate-re
   (concat
    "^\\(?: *[^ ]+ +\\)?\\([0-9]+\\) "
-   "\\([0-9]\\{4\\}-[0-1][0-9]-[0-3][0-9]\\): "
+   "\\([0-9]\\{4\\}-[0-1][0-9]-[0-3][0-9]\\)[^:]*: "
    ))
 
-(defconst vc-hgcmd-annotate-filename-re
-  "^\\(?: *[^ ]+ +\\)?\\([0-9]+\\) [0-9]\\{4\\}-[0-1][0-9]-[0-3][0-9]\\( +\\([^:]+\\)\\):"
-  )
+(defun vc-hgcmd--file-name-at-rev (file rev)
+  "Return filename of FILE at REV."
+  (or (with-temp-buffer
+        (when (vc-hgcmd--run-command (make-vc-hgcmd--command :command (list "status" "--rev" rev "-C" file) :output-buffer (current-buffer) :wait t))
+          (goto-char (point-min))
+          (when (search-forward-regexp "^  \\(.+\\)$" nil t)
+            (match-string-no-properties 1))))
+      file))
 
 (defun vc-hgcmd-annotate-command (file buffer &optional revision)
   "Annotate REVISION of FILE to BUFFER."
   (apply #'vc-hgcmd-command-to-buffer buffer
          (nconc
-          (list "annotate" "-qdnuf")
+          (list "annotate" "-qdnu")
           (when revision (list "-r" revision))
-          (list (vc-hgcmd--file-relative-name file))))
-  ;; hide filenames but keep it in properties
-  (with-current-buffer buffer
-    (let ((inhibit-read-only t))
-      (goto-char (point-min))
-      (while (not (eobp))
-        (when (looking-at vc-hgcmd-annotate-filename-re)
-          (add-text-properties (line-beginning-position) (line-end-position)
-                               (list 'vc-hgcmd-annotate-filename (match-string-no-properties 3)
-                                     'vc-hgcmd-annotate-revision (match-string-no-properties 1)))
-          (delete-region (match-beginning 2) (match-end 2)))
-        (forward-line)))))
+          (list (vc-hgcmd--file-name-at-rev (vc-hgcmd--file-relative-name file) revision)))))
 
 (declare-function vc-annotate-convert-time "vc-annotate" (&optional time))
 
@@ -1127,8 +1135,10 @@ Insert output to process buffer and check if amount of data is enought to parse 
 
 (defun vc-hgcmd-annotate-extract-revision-at-line ()
   "Return revision at line."
-  (cons (get-text-property (point) 'vc-hgcmd-annotate-revision)
-        (expand-file-name (get-text-property (point) 'vc-hgcmd-annotate-filename) (vc-hgcmd-root default-directory))))
+  (save-excursion
+    (beginning-of-line)
+    (when (looking-at vc-hgcmd-annotate-re)
+      (match-string-no-properties 1))))
 
 (defun vc-hgcmd-create-tag (_dir name branchp)
   "Create tag NAME. If BRANCHP create named branch."
@@ -1144,16 +1154,31 @@ Insert output to process buffer and check if amount of data is enought to parse 
   "Return root folder of repository for FILE."
   (vc-find-root file ".hg"))
 
-(defun vc-hgcmd-previous-revision (_file rev)
-  "Revison prior to REV."
-  (unless (string= rev "0")
-    (vc-hgcmd-command "id" "-n" "-r" (concat rev "^"))))
+(defun vc-hgcmd-previous-revision (file rev)
+  "Revison prior to REV for FILE."
+  (let ((newrev (vc-hgcmd-command
+                 "log"
+                 "-r" (format "last(limit(reverse(%s..%s), 2))"
+                              (if file (format "follow('%s') and " (vc-hgcmd--file-relative-name file)) "")
+                              rev)
+                 "--template" "{rev}")))
+    (when (and newrev (not (string= rev newrev)))
+      newrev)))
 
-(defun vc-hgcmd-next-revision (_file rev)
-  "Revision after REV."
-  (let ((newrev (1+ (string-to-number rev))))
-    (when (<= newrev (string-to-number (vc-hgcmd-command "tip" "-T" "{rev}")))
-      (number-to-string newrev))))
+(defun vc-hgcmd-next-revision (file rev)
+  "Revision after REV for FILE."
+  (let ((nextrev (vc-hgcmd-command
+                  "log"
+                  "-r"
+                  (format "last(limit(%s%s.., 2))"
+                          (if file
+                              (format "follow('%s') and " (vc-hgcmd--file-relative-name file))
+                            "")
+                          rev)
+                  "--template"
+                  "{rev}")))
+    (when (and nextrev (not (string= nextrev rev)))
+      nextrev)))
 
 (declare-function log-edit-mode "log-edit" ())
 

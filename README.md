@@ -52,10 +52,14 @@ Instead of list of all revisions of file `vc-hgcmd` provides list of named branc
 It's very useful on `vc-retrieve-tag`.
 You can specify `-C` to run `hg update` with `-C` flag and discard all uncommitted changes.
 
-#### Filenames in `vc-annotate` buffer are hidden
+#### Filenames in `vc-annotate` buffer is omitted
 
-They are needed to annotate changes across file renames but mostly useless in annotate buffer.
-`vc-hgcmd` removes it from annotate buffer but keep it in text properties.
+They are mostly useless in annotate buffer.
+To find out right filename to annotate `vc-hgcmd` uses `status --rev <rev> -C file`.
+
+### `previous-revision` and `next-revision` respect files
+
+Keys `p` and `n` in annotation buffer works correctly.
 
 #### Create tag
 
