@@ -5,7 +5,7 @@
 ;; Author: Andrii Kolomoiets <andreyk.mad@gmail.com>
 ;; Keywords: vc
 ;; URL: https://github.com/muffinmad/emacs-vc-hgcmd
-;; Package-Version: 1.6.2
+;; Package-Version: 1.6.3
 ;; Package-Requires: ((emacs "25.1"))
 
 ;; This file is NOT part of GNU Emacs.
@@ -969,7 +969,10 @@ Insert output to process buffer and check if amount of data is enought to parse 
 (defun vc-hgcmd-find-revision (file rev buffer)
   "Put REV of FILE to BUFFER."
   (let ((file (vc-hgcmd--file-relative-name file)))
-    (apply #'vc-hgcmd-command-to-buffer buffer (if rev (list "cat" "-r" rev file) (list "cat" file)))))
+    (apply #'vc-hgcmd-command-to-buffer buffer
+           (if rev
+               (nconc (list "cat" "-r" rev) (vc-hgcmd--file-name-at-rev (list file) rev))
+             (list "cat" file)))))
 
 (defun vc-hgcmd-checkout (file &optional rev)
   "Retrieve revision REV of FILE."
