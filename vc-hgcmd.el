@@ -5,7 +5,7 @@
 ;; Author: Andrii Kolomoiets <andreyk.mad@gmail.com>
 ;; Keywords: vc
 ;; URL: https://github.com/muffinmad/emacs-vc-hgcmd
-;; Package-Version: 1.6.1
+;; Package-Version: 1.6.2
 ;; Package-Requires: ((emacs "25.1"))
 
 ;; This file is NOT part of GNU Emacs.
@@ -1090,7 +1090,7 @@ Insert output to process buffer and check if amount of data is enought to parse 
                   (list "diff")
                   (when rev1 (list "-r" rev1))
                   (when rev2 (list "-r" rev2))
-                  (unless (equal files (list default-directory))
+                  (when (and files (not (equal files (list default-directory))))
                     (let ((files (mapcar #'vc-hgcmd--file-relative-name files)))
                       (if rev2 (vc-hgcmd--file-name-at-rev files rev2) files))))))
     (apply #'vc-hgcmd-command-to-buffer buffer command)))
@@ -1107,18 +1107,19 @@ Insert output to process buffer and check if amount of data is enought to parse 
 
 (defun vc-hgcmd--file-name-at-rev (files rev)
   "Return filename of FILES at REV."
-  (or (with-temp-buffer
-        (when (vc-hgcmd--run-command (make-vc-hgcmd--command :command (nconc (list "status" "--rev" rev "-C") files) :output-buffer (current-buffer) :wait t))
-          (goto-char (point-min))
-          (let (result)
-            (while (not (eobp))
-              (unless (save-excursion
-                        (forward-line)
-                        (and (point-at-bol) (eq (char-after) ?\s)))
-                (push (buffer-substring-no-properties (+ (point) 2) (line-end-position)) result))
-              (forward-line))
-            result)))
-      files))
+  (when files
+    (or (with-temp-buffer
+          (when (vc-hgcmd--run-command (make-vc-hgcmd--command :command (nconc (list "status" "--rev" rev "-C") files) :output-buffer (current-buffer) :wait t))
+            (goto-char (point-min))
+            (let (result)
+              (while (not (eobp))
+                (unless (save-excursion
+                          (forward-line)
+                          (and (point-at-bol) (eq (char-after) ?\s)))
+                  (push (buffer-substring-no-properties (+ (point) 2) (line-end-position)) result))
+                (forward-line))
+              result)))
+        files)))
 
 (defun vc-hgcmd-annotate-command (file buffer &optional revision)
   "Annotate REVISION of FILE to BUFFER."
@@ -1147,6 +1148,18 @@ Insert output to process buffer and check if amount of data is enought to parse 
     (beginning-of-line)
     (when (looking-at vc-hgcmd-annotate-re)
       (match-string-no-properties 1))))
+
+(defun vc-hgcmd-region-history(file buffer lfrom lto)
+  "Insert into BUFFER the history of the content of FILE between lines LFROM and LTO."
+  (when (vc-hgcmd-command-to-buffer
+         buffer
+         "log" "-fL" (format "%s,%d:%d" (vc-hgcmd--file-relative-name file) lfrom lto))
+    (with-current-buffer buffer
+      (goto-char (point-min)))
+    (select-window (display-buffer buffer))))
+
+(define-derived-mode vc-hgcmd-region-history-mode vc-hgcmd-log-view-mode "Region-History/Hgcmd"
+  "Major mode to browse Hg's \"log -f -p -L\" output.")
 
 (defun vc-hgcmd-create-tag (_dir name branchp)
   "Create tag NAME. If BRANCHP create named branch."
