@@ -5,7 +5,7 @@
 ;; Author: Andrii Kolomoiets <andreyk.mad@gmail.com>
 ;; Keywords: vc
 ;; URL: https://github.com/muffinmad/emacs-vc-hgcmd
-;; Package-Version: 1.6.3
+;; Package-Version: 1.6.4
 ;; Package-Requires: ((emacs "25.1"))
 
 ;; This file is NOT part of GNU Emacs.
@@ -1092,7 +1092,7 @@ Insert output to process buffer and check if amount of data is enought to parse 
   (let ((command (nconc
                   (list "diff")
                   (when rev1 (list "-r" rev1))
-                  (when rev2 (list "-r" rev2))
+                  (when rev2 (list (if rev1 "-r" "-c") rev2))
                   (when (and files (not (equal files (list default-directory))))
                     (let ((files (mapcar #'vc-hgcmd--file-relative-name files)))
                       (if rev2 (vc-hgcmd--file-name-at-rev files rev2) files))))))
