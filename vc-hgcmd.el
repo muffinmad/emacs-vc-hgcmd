@@ -5,7 +5,7 @@
 ;; Author: Andrii Kolomoiets <andreyk.mad@gmail.com>
 ;; Keywords: vc
 ;; URL: https://github.com/muffinmad/emacs-vc-hgcmd
-;; Package-Version: 1.6.4
+;; Package-Version: 1.6.5
 ;; Package-Requires: ((emacs "25.1"))
 
 ;; This file is NOT part of GNU Emacs.
@@ -72,7 +72,7 @@
 ;; - annotate-time ()                              OK
 ;; - annotate-current-time ()                      NO
 ;; - annotate-extract-revision-at-line ()          OK
-;; - region-history (FILE BUFFER LFROM LTO)        NO --line-range option is experimental
+;; - region-history (FILE BUFFER LFROM LTO)        OK experimental option "line-range" added in mercurial 4.4
 ;; - region-history-mode ()                        NO
 ;; - mergebase (rev1 &optional rev2)               TODO
 ;; TAG SYSTEM
@@ -1156,13 +1156,50 @@ Insert output to process buffer and check if amount of data is enought to parse 
   "Insert into BUFFER the history of the content of FILE between lines LFROM and LTO."
   (when (vc-hgcmd-command-to-buffer
          buffer
-         "log" "-fL" (format "%s,%d:%d" (vc-hgcmd--file-relative-name file) lfrom lto))
+         "log" "-fpL" (format "%s,%d:%d" (vc-hgcmd--file-relative-name file) lfrom lto))
     (with-current-buffer buffer
       (goto-char (point-min)))
     (select-window (display-buffer buffer))))
 
+(require 'diff-mode)
+
+(defvar vc-hgcmd--log-view-region-history-font-lock-keywords nil)
+(defvar font-lock-keywords)
+(defvar vc-hgcmd-region-history-font-lock-keywords '((vc-hgcmd-region-history-font-lock)))
+
+(defun vc-hgcmd-region-history-font-lock (limit)
+  "Fontify region bounds by LIMIT in region history buffer."
+  (let ((in-diff (save-excursion
+                   (beginning-of-line)
+                   (or (looking-at "^\\(?:diff\\|changeset\\)\\>")
+                       (re-search-backward "^\\(?:diff\\|changeset\\)\\>" nil t))
+                   (eq ?d (char-after (match-beginning 0))))))
+    (while
+        (let ((end (save-excursion
+                     (if (re-search-forward "\n\\(diff\\|changeset\\)\\>" limit t)
+                         (match-beginning 1)
+                       limit))))
+          (let ((font-lock-keywords (if in-diff
+                                        diff-font-lock-keywords
+                                      vc-hgcmd--log-view-region-history-font-lock-keywords)))
+            (font-lock-fontify-keywords-region (point) end))
+          (goto-char end)
+          (prog1 (< (point) limit)
+            (setq in-diff (eq ?d (char-after))))))
+    nil))
+
+(defvar vc-hgcmd-region-history-mode-map
+  (let ((map (make-composed-keymap
+              (list diff-mode-map vc-hgcmd-log-view-mode-map))))
+    map))
+
 (define-derived-mode vc-hgcmd-region-history-mode vc-hgcmd-log-view-mode "Region-History/Hgcmd"
-  "Major mode to browse Hg's \"log -f -p -L\" output.")
+  "Major mode to browse Hg's \"log -f -p -L\" output."
+  (setq-local vc-hgcmd--log-view-region-history-font-lock-keywords
+              log-view-font-lock-keywords)
+  (setq-local font-lock-defaults
+              (cons 'vc-hgcmd-region-history-font-lock-keywords
+                    (cdr font-lock-defaults))))
 
 (defun vc-hgcmd-create-tag (_dir name branchp)
   "Create tag NAME. If BRANCHP create named branch."
