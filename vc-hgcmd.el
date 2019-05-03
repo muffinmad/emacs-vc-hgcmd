@@ -5,7 +5,7 @@
 ;; Author: Andrii Kolomoiets <andreyk.mad@gmail.com>
 ;; Keywords: vc
 ;; URL: https://github.com/muffinmad/emacs-vc-hgcmd
-;; Package-Version: 1.6.5
+;; Package-Version: 1.6.6
 ;; Package-Requires: ((emacs "25.1"))
 
 ;; This file is NOT part of GNU Emacs.
