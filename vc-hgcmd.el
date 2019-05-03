@@ -405,7 +405,6 @@ Insert output to process buffer and check if amount of data is enought to parse 
             (set-process-query-on-exit-flag process nil)
             (set-process-coding-system process 'no-conversion 'no-conversion)
             ;; read hello message
-            ;; TODO parse encoding
             ;; check process again because it can be tramp sh process with output like "env: hg not found"
             (let ((output (vc-hgcmd--read-output)))
               (while (and (process-live-p process) (or (not output) (not (string-prefix-p "capabilities: " (cdr output)))))
@@ -936,8 +935,6 @@ Insert output to process buffer and check if amount of data is enought to parse 
 
 (defalias 'vc-hgcmd-responsible-p 'vc-hgcmd-root)
 
-;; TODO receive-file
-
 (defun vc-hgcmd-unregister (file)
   "Forget FILE."
   (vc-hgcmd-command "forget" (vc-hgcmd--file-relative-name file)))
@@ -1312,17 +1309,13 @@ Insert output to process buffer and check if amount of data is enought to parse 
     (vc-hgcmd-mark-resolved (list buffer-file-name))
     (remove-hook 'after-save-hook #'vc-hgcmd--after-save-hook t)))
 
-;; TODO It's really handy to autostart smerge but additional hg command will be called on every find-file
 (defun vc-hgcmd-find-file-hook ()
   "Find file hook. Start smerge session if vc state eq conflict."
-  (when (vc-hgcmd--file-unresolved-p buffer-file-name)
+  (when (and buffer-file-name
+             (eq (vc-state buffer-file-name 'Hgcmd) 'conflict))
     (smerge-start-session)
     (add-hook 'after-save-hook #'vc-hgcmd--after-save-hook nil t)
     (vc-message-unresolved-conflicts buffer-file-name)))
-
-;; TODO extra menu
-
-;; TODO extra-dir-menu. update -C for example or commit --close-branch or --amend without changes
 
 (defun vc-hgcmd-conflicted-files (&optional _dir)
   "List of files with conflict or resolved conflict."
