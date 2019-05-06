@@ -93,12 +93,16 @@ It is possible to answer to hg questions, e.g. pick action during merge
 
 ## Installation
 
+### 1. Install package
+
 `vc-hgcmd` available on [MELPA](http://melpa.org):
 
 <kbd>M-x</kbd> `package-install` <kbd>RET</kbd> `vc-hgcmd` <kbd>RET</kbd>.
 
-Alternatively, you can download `vc-hgcmd.el` and run:
+Alternatively, download `vc-hgcmd.el` and run:
 
 <kbd>M-x</kbd> `package-install-file` <kbd>RET</kbd> `<path-to-vc-hgcmd-el>` <kbd>RET</kbd>
 
-Also you need to add `Hgcmd` to `vc-handled-backends` before or instead `Hg`.
+### 2. Enable `Hgcmd` backend
+
+Add `Hgcmd` to `vc-handled-backends` before or instead `Hg`.
