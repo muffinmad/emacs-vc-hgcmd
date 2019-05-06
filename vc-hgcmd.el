@@ -5,7 +5,7 @@
 ;; Author: Andrii Kolomoiets <andreyk.mad@gmail.com>
 ;; Keywords: vc
 ;; URL: https://github.com/muffinmad/emacs-vc-hgcmd
-;; Package-Version: 1.6.6
+;; Package-Version: 1.6.7
 ;; Package-Requires: ((emacs "25.1"))
 
 ;; This file is NOT part of GNU Emacs.
@@ -870,7 +870,7 @@ Insert output to process buffer and check if amount of data is enought to parse 
 
 (defun vc-hgcmd-working-revision (file)
   "Working revision of FILE. Result is revision of FILE up to repository revision."
-  (let* ((reporev (string-trim-right (vc-hgcmd-command "id" "-n") "+"))
+  (let* ((reporev (car-safe (split-string (vc-hgcmd-command "id" "-n") "+")))
          (filerev (when file
                     (vc-hgcmd-command
                      "log"
