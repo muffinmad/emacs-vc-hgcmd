@@ -5,7 +5,7 @@
 ;; Author: Andrii Kolomoiets <andreyk.mad@gmail.com>
 ;; Keywords: vc
 ;; URL: https://github.com/muffinmad/emacs-vc-hgcmd
-;; Package-Version: 1.6.7
+;; Package-Version: 1.6.8
 ;; Package-Requires: ((emacs "25.1"))
 
 ;; This file is NOT part of GNU Emacs.
@@ -185,7 +185,9 @@
   "Hg executable."
   :type '(string))
 
-(defcustom vc-hgcmd-cmdserver-config-options '("ui.interactive=True" "ui.editor=emacsclient -a emacs")
+(defcustom vc-hgcmd-cmdserver-config-options '("ui.interactive=True"
+                                               "ui.editor=emacsclient -a emacs"
+                                               "extensions.shelve=")
   "Config options for command server.
 Specify options in form <option>=<value>. It will be passed to hg with --config argument."
   :type '(repeat string))
@@ -213,7 +215,7 @@ same branch was merged."
           (function)
           (const :tag "Default commit message" nil)))
 
-(defcustom vc-hgcmd-dir-show-shelve nil
+(defcustom vc-hgcmd-dir-show-shelve t
   "Show current shelves in `vc-dir' buffer."
   :type '(boolean))
 
