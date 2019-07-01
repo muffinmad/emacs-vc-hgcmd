@@ -5,7 +5,7 @@
 ;; Author: Andrii Kolomoiets <andreyk.mad@gmail.com>
 ;; Keywords: vc
 ;; URL: https://github.com/muffinmad/emacs-vc-hgcmd
-;; Package-Version: 1.6.8
+;; Package-Version: 1.6.9
 ;; Package-Requires: ((emacs "25.1"))
 
 ;; This file is NOT part of GNU Emacs.
@@ -277,19 +277,17 @@ same branch was merged."
               (inhibit-read-only t))
           (delete-region 1 (- (point) 5))
           (cons ?o data))
-      (let* ((data (bindat-unpack '((c byte) (d u32)) (vconcat (buffer-substring-no-properties 1 6))))
+      (let* ((data (bindat-unpack '((c byte) (d u32)) (buffer-substring-no-properties 1 6)))
              (channel (bindat-get-field data 'c))
              (size (bindat-get-field data 'd)))
         (cond ((memq channel '(?o ?e ?d ?r))
                (when (> (point-max) (+ 5 size))
-                 (let ((data (vconcat (buffer-substring-no-properties 6 (+ 6 size))))
+                 (let ((data (buffer-substring-no-properties 6 (+ 6 size)))
                        (inhibit-read-only t))
                    (delete-region 1 (+ 6 size))
                    (cons channel (if (eq channel ?r)
                                      (bindat-get-field (bindat-unpack `((f u32)) data) 'f)
-                                   (decode-coding-string
-                                    (bindat-get-field (bindat-unpack `((f str ,(length data))) data) 'f)
-                                    vc-hgcmd--encoding))))))
+                                   (decode-coding-string data vc-hgcmd--encoding))))))
               ((memq channel '(?I ?L))
                (let ((inhibit-read-only t))
                  (delete-region 1 6))
