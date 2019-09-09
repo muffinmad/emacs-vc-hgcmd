@@ -85,11 +85,21 @@ Additionally predefined commit message passed to custom function `vc-hgcmd-log-e
 
 #### Run custom hg commands
 
-Interactive function `vc-hgcmd-runcommand` allow execute custom command.
+Interactive function `vc-hgcmd-runcommand` allow execute custom command
 
 #### Interactive
 
 It is possible to answer to hg questions, e.g. pick action during merge
+
+#### View changes made by revision; diff to parents
+
+Additional bindings in `log-view-mode`:
+- <kbd>c c</kbd> view change made by revision at point (`-c` option to `hg diff` command)
+- <kbd>c 1</kbd> view diff between revision at point and its first parent
+- <kbd>c 2</kbd> view diff between revision at point and its second parent
+
+<kbd>C c</kbd>, <kbd>C 1</kbd> and <kbd>C 2</kbd> show corresponding diffs for whole changeset
+
 
 ## Installation
 

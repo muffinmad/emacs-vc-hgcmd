@@ -5,7 +5,7 @@
 ;; Author: Andrii Kolomoiets <andreyk.mad@gmail.com>
 ;; Keywords: vc
 ;; URL: https://github.com/muffinmad/emacs-vc-hgcmd
-;; Package-Version: 1.6.9
+;; Package-Version: 1.7
 ;; Package-Requires: ((emacs "25.1"))
 
 ;; This file is NOT part of GNU Emacs.
@@ -162,6 +162,13 @@
 ;; - It is possible to answer to hg questions, e.g. pick action during merge
 ;;
 ;; - Option to display shelves in `vc-dir'
+;;
+;; - View changes made by revision; diff to parents
+;; Additional bindings in `log-view-mode':
+;;  - `c c' view change made by revision at point (-c option to hg diff command)
+;;  - `c 1' view diff between revision at point and its first parent
+;;  - `c 2' view diff between revision at point and its second parent
+;; `C c', `C 1' and `C 2' shows corresponding diffs for whole changeset.
 
 ;;; Code:
 
@@ -551,6 +558,16 @@ Insert output to process buffer and check if amount of data is enought to parse 
   "Return tags list."
   (split-string (vc-hgcmd-command "tags" "-q") "\n"))
 
+(defun vc-hgcmd--parents (template &optional revision)
+  "Return parents of REVISION formatted by TEMPLATE string."
+  (let ((parents (vc-hgcmd-command
+                  "log"
+                  "-r"
+                  (format "p1(%1$s)+p2(%1$s)" (or revision ""))
+                  "--template"
+                  (concat template "\\n"))))
+    (when parents (split-string parents "\n"))))
+
 (defun vc-hgcmd--file-relative-name (file)
   "Return FILE file name relative to vc root."
   (file-relative-name file (vc-hgcmd-root file)))
@@ -735,9 +752,9 @@ Insert output to process buffer and check if amount of data is enought to parse 
 
 (defun vc-hgcmd-dir-extra-headers (_dir)
   "Return summary command for DIR output as dir extra headers."
-  (let* ((parents (vc-hgcmd-command "log" "-r" "p1()+p2()" "--template" "{rev}:{node|short}\\0{branch}\\0{tags}\\0{desc|firstline}\\n"))
+  (let* ((parents (vc-hgcmd--parents "{rev}:{node|short}\\0{branch}\\0{tags}\\0{desc|firstline}"))
          (result (when parents
-                   (apply #'concat (mapcar #'vc-hgcmd--parent-info (split-string parents "\n"))))))
+                   (apply #'concat (mapcar #'vc-hgcmd--parent-info parents)))))
     (concat
      result
      (with-temp-buffer
@@ -1053,6 +1070,18 @@ Insert output to process buffer and check if amount of data is enought to parse 
 (defvar log-view-per-file-logs)
 (defvar log-view-message-re)
 (defvar log-view-font-lock-keywords)
+(defvar log-view-vc-backend)
+(defvar log-view-vc-fileset)
+
+(defvar vc-hgcmd-log-view-mode-map
+  (let ((map (make-sparse-keymap)))
+    (define-key map (kbd "c c") 'vc-hgcmd-diff-revision)
+    (define-key map (kbd "c 1") 'vc-hgcmd-diff-parent1)
+    (define-key map (kbd "c 2") 'vc-hgcmd-diff-parent2)
+    (define-key map (kbd "C c") 'vc-hgcmd-diff-revision-changeset)
+    (define-key map (kbd "C 1") 'vc-hgcmd-diff-parent1-changeset)
+    (define-key map (kbd "C 2") 'vc-hgcmd-diff-parent2-changeset)
+    map))
 
 (define-derived-mode vc-hgcmd-log-view-mode log-view-mode "Log-View/Hgcmd"
   (require 'add-log)
@@ -1083,6 +1112,52 @@ Insert output to process buffer and check if amount of data is enought to parse 
     (when (search-forward-regexp (format vc-hgcmd--message-re (vc-hgcmd-working-revision nil)) nil t)
       (goto-char (match-beginning 0))
       nil)))
+
+(declare-function log-view-current-tag "log-view" (&optional pos))
+
+(defun vc-hgcmd--diff-revision (pos files)
+  "Show change made by revision at POS for FILES. If FILES is nil show diff for whole changeset."
+  (vc-diff-internal t (list log-view-vc-backend files) nil (log-view-current-tag pos)))
+
+(defun vc-hgcmd-diff-revision (pos)
+  "Show change made by revision at POS."
+  (interactive "d")
+  (vc-hgcmd--diff-revision pos log-view-vc-fileset))
+
+(defun vc-hgcmd-diff-revision-changeset (pos)
+  "Show change made by revison at POS in whole changeset."
+  (interactive "d")
+  (vc-hgcmd--diff-revision pos nil))
+
+(defun vc-hgcmd--diff-parent (pos parent-fn files)
+  "Show diff for changeset at POS and parent retrieved by PARENT-FN for FILES.
+PARENT-FN is called with `vc-hgcmd--parents' result as an argument.
+If FILES is nil show diff for whole changeset."
+  (let* ((to (log-view-current-tag pos))
+         (fr (funcall parent-fn (vc-hgcmd--parents "{rev}" to))))
+    (unless fr
+      (user-error "Revision %s has no such parent" to))
+    (vc-diff-internal t (list log-view-vc-backend files) fr to)))
+
+(defun vc-hgcmd-diff-parent1 (pos)
+  "Show diff between revision at POS and parent 1."
+  (interactive "d")
+  (vc-hgcmd--diff-parent pos 'car log-view-vc-fileset))
+
+(defun vc-hgcmd-diff-parent2 (pos)
+  "Show diff between revision at POS and parent 2."
+  (interactive "d")
+  (vc-hgcmd--diff-parent pos 'cadr log-view-vc-fileset))
+
+(defun vc-hgcmd-diff-parent1-changeset (pos)
+  "Show diff between revision at POS and parent 1 in whole changeset."
+  (interactive "d")
+  (vc-hgcmd--diff-parent pos 'car nil))
+
+(defun vc-hgcmd-diff-parent2-changeset (pos)
+  "Show diff between revision at POS and parent 2 in whole changeset."
+  (interactive "d")
+  (vc-hgcmd--diff-parent pos 'cadr nil))
 
 (defun vc-hgcmd-diff (files &optional rev1 rev2 buffer _async)
   "Place diff of FILES between REV1 and REV2 into BUFFER."
@@ -1242,7 +1317,7 @@ Insert output to process buffer and check if amount of data is enought to parse 
 
 (defun vc-hgcmd--log-edit-default-message ()
   "Return 'merged ...' if there are two parents."
-  (let* ((parents (split-string (vc-hgcmd-command "log" "-r" "p1()+p2()" "--template" "{node}\\0{branch}\\n") "\n"))
+  (let* ((parents (vc-hgcmd--parents "{node}\\0{branch}"))
          (p1 (car parents))
          (p2 (cadr parents)))
     (when p2
