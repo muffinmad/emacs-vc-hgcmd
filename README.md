@@ -100,6 +100,9 @@ Additional bindings in `log-view-mode`:
 
 <kbd>C c</kbd>, <kbd>C 1</kbd> and <kbd>C 2</kbd> show corresponding diffs for whole changeset
 
+#### View log for revset
+
+Command `vc-hgcmd-print-log-revset` allows to print log for revset, e.g. `branch(branch1) or branch(branch2)`
 
 ## Installation
 

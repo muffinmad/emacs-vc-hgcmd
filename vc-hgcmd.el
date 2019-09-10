@@ -5,7 +5,7 @@
 ;; Author: Andrii Kolomoiets <andreyk.mad@gmail.com>
 ;; Keywords: vc
 ;; URL: https://github.com/muffinmad/emacs-vc-hgcmd
-;; Package-Version: 1.7
+;; Package-Version: 1.8
 ;; Package-Requires: ((emacs "25.1"))
 
 ;; This file is NOT part of GNU Emacs.
@@ -169,6 +169,10 @@
 ;;  - `c 1' view diff between revision at point and its first parent
 ;;  - `c 2' view diff between revision at point and its second parent
 ;; `C c', `C 1' and `C 2' shows corresponding diffs for whole changeset.
+;;
+;; - View log for revset
+;; Command `vc-hgcmd-print-log-revset' allows to print log for
+;; revset, e.g. "branch(branch1) or branch(branch2)"
 
 ;;; Code:
 
@@ -1023,6 +1027,8 @@ Insert output to process buffer and check if amount of data is enought to parse 
   "Mark FILES resolved."
   (apply #'vc-hgcmd-command (nconc (list "resolve" "-m") (mapcar #'vc-hgcmd--file-relative-name files))))
 
+(defvar vc-hgcmd--print-log-revset nil)
+
 (defun vc-hgcmd-print-log (files buffer &optional shortlog start-revision limit)
   "Put maybe SHORTLOG log of FILES to BUFFER starting with START-REVISION limited by LIMIT."
   ;; TODO short log
@@ -1032,7 +1038,7 @@ Insert output to process buffer and check if amount of data is enought to parse 
           (when shortlog (list "-G"))
           (when start-revision
             ;; start revision is used for branch log or specific revision log when limit is 1
-            (list (if (eq limit 1) "-r" "-b") start-revision))
+            (list (if (or vc-hgcmd--print-log-revset (eq limit 1)) "-r" "-b") start-revision))
           (when limit (list "-l" (number-to-string limit)))
           ;; file list not needed if limit is 1
           (unless (eq limit 1)
@@ -1047,6 +1053,19 @@ Insert output to process buffer and check if amount of data is enought to parse 
         (if p
             (goto-char p)
           (unless start-revision (vc-hgcmd-show-log-entry nil)))))))
+
+(defun vc-hgcmd-print-log-revset (revset)
+  "Show the change log for REVSET."
+  (interactive "sRevset to log: ")
+  (when (string-blank-p revset)
+    (user-error "No revset specified"))
+  (let ((vc-hgcmd--print-log-revset t))
+    (vc-print-log-internal
+     'Hgcmd
+     (list default-directory)
+     revset
+     t
+     (when (> vc-log-show-limit 0) vc-log-show-limit))))
 
 (defun vc-hgcmd--log-in-or-out (type buffer remote-location)
   "Log TYPE changesets for REMOTE-LOCATION to BUFFER."
@@ -1063,7 +1082,7 @@ Insert output to process buffer and check if amount of data is enought to parse 
 
 (defun vc-hgcmd--graph-data-re (re)
   "Add graph data re to RE."
-  (concat "^\\(?:[o@_x*+-|/: ]*\\)" re))
+  (concat "^\\(?:[o@_x*+-~|/: ]*\\)" re))
 
 (defconst vc-hgcmd--message-re (vc-hgcmd--graph-data-re "changeset:\\s-*\\(%s\\):\\([[:xdigit:]]+\\)"))
 (defconst vc-hgcmd--log-view-message-re (format vc-hgcmd--message-re "[[:digit:]]+"))
