@@ -5,7 +5,7 @@
 ;; Author: Andrii Kolomoiets <andreyk.mad@gmail.com>
 ;; Keywords: vc
 ;; URL: https://github.com/muffinmad/emacs-vc-hgcmd
-;; Package-Version: 1.8
+;; Package-Version: 1.8.1
 ;; Package-Requires: ((emacs "25.1"))
 
 ;; This file is NOT part of GNU Emacs.
@@ -475,7 +475,7 @@ Insert output to process buffer and check if amount of data is enought to parse 
           (when (or (stringp output-buffer) (buffer-live-p output-buffer))
             (with-current-buffer output-buffer
               (setq mode-line-process
-                    (propertize (format " [running %s...]" (car (vc-hgcmd--command-command cmd)))
+                    (propertize (format " [running %s...]" (car command))
                                 'face 'mode-line-emphasis
                                 'help-echo
                                 "A command is in progress in this buffer"))))
@@ -483,7 +483,10 @@ Insert output to process buffer and check if amount of data is enought to parse 
            process
            (concat
             "runcommand\n"
-            (let* ((args (mapconcat #'vc-hgcmd--encode-command-arg command "\0"))
+            (let* ((args (mapconcat #'vc-hgcmd--encode-command-arg
+                                    (append '("--config" "ui.report_untrusted=0")
+                                            command)
+                                    "\0"))
                    (binary-data (bindat-pack '((l u32)) `((l . ,(length args))))))
               (concat (if tty
                           (vc-hgcmd--data-for-tty binary-data)
