@@ -5,7 +5,7 @@
 ;; Author: Andrii Kolomoiets <andreyk.mad@gmail.com>
 ;; Keywords: vc
 ;; URL: https://github.com/muffinmad/emacs-vc-hgcmd
-;; Package-Version: 1.8.1
+;; Package-Version: 1.9
 ;; Package-Requires: ((emacs "25.1"))
 
 ;; This file is NOT part of GNU Emacs.
@@ -62,6 +62,7 @@
 ;; * print-log (files buffer &optional shortlog start-revision limit)  OK but graph log if shortlog
 ;; * log-outgoing (backend remote-location)        OK
 ;; * log-incoming (backend remote-location)        OK
+;; - log-search (buffer pattern)                   OK
 ;; - log-view-mode ()                              OK
 ;; - show-log-entry (revision)                     OK
 ;; - comment-history (file)                        NO
@@ -1082,6 +1083,20 @@ Insert output to process buffer and check if amount of data is enought to parse 
 (defun vc-hgcmd-log-incoming (buffer remote-location)
   "Log incoming from REMOTE-LOCATION to BUFFER."
   (vc-hgcmd--log-in-or-out "incoming" buffer remote-location))
+
+(defun vc-hgcmd-log-search (buffer pattern)
+  "Search the change log for keyword PATTERN and output results into BUFFER.
+
+PATTERN is passed as argument to 'hg log -k' command.
+
+With prefix argument, ask for 'log' command arguments."
+  (let ((args (if current-prefix-arg
+                  (split-string-and-unquote
+                   (read-shell-command
+                    "Search log with command 'hg log': "
+                    "-k "))
+                (list "-k" pattern))))
+    (apply #'vc-hgcmd-command-to-buffer buffer (nconc (list "log") args))))
 
 (defun vc-hgcmd--graph-data-re (re)
   "Add graph data re to RE."
