@@ -5,7 +5,7 @@
 ;; Author: Andrii Kolomoiets <andreyk.mad@gmail.com>
 ;; Keywords: vc
 ;; URL: https://github.com/muffinmad/emacs-vc-hgcmd
-;; Package-Version: 1.9
+;; Package-Version: 1.9.1
 ;; Package-Requires: ((emacs "25.1"))
 
 ;; This file is NOT part of GNU Emacs.
@@ -30,6 +30,7 @@
 ;; FUNCTION NAME                                   STATUS
 ;; BACKEND PROPERTIES
 ;; * revision-granularity                          OK
+;; - update-on-retrieve-tag                        OK
 ;; STATE-QUERYING FUNCTIONS
 ;; * registered (file)                             OK
 ;; * state (file)                                  OK
@@ -586,6 +587,10 @@ Insert output to process buffer and check if amount of data is enought to parse 
 (defun vc-hgcmd-revision-granularity ()
   "Per-repository revision number."
   'repository)
+
+(defun vc-hgcmd-update-on-retrieve-tag ()
+  "No buffers update on retrieve tag."
+  nil)
 
 ;;;###autoload (defun vc-hgcmd-registered (file)
 ;;;###autoload   (when (vc-find-root file ".hg")
