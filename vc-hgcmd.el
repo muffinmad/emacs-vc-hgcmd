@@ -689,27 +689,6 @@ Insert output to process buffer and check if amount of data is enought to parse 
       :callback-args update-function
       :skip-error t))))
 
-(defun vc-hgcmd--extra-header (name value)
-  "Format NAME and VALUE as dir extra header."
-  (concat (propertize name 'face 'font-lock-type-face)
-          (propertize value 'face 'font-lock-variable-name-face)
-          "\n"))
-
-(defun vc-hgcmd--parent-info (data)
-  "Parse and propertize parent log info from DATA."
-  (when data
-    (cl-multiple-value-bind (rev branch tags desc) (split-string data "\0")
-      (apply #'concat
-             (list
-              (vc-hgcmd--extra-header "Parent     : " (concat rev " " branch " " tags))
-              (vc-hgcmd--extra-header "           : " desc))))))
-
-(defun vc-hgcmd--summary-info (search name)
-  "Search for summary info prefixed by SEARCH and propertize with NAME."
-  (goto-char (point-min))
-  (when (search-forward-regexp (format "^%s: \\(.*\\)" search) nil t)
-    (vc-hgcmd--extra-header name (match-string-no-properties 1))))
-
 (defvar vc-hgcmd-extra-menu-map
   (let ((map (make-sparse-keymap)))
     (define-key map [hgcmd-sl]
@@ -765,47 +744,52 @@ Insert output to process buffer and check if amount of data is enought to parse 
 
 (defun vc-hgcmd-dir-extra-headers (_dir)
   "Return summary command for DIR output as dir extra headers."
-  (let* ((parents (vc-hgcmd--parents "{rev}:{node|short}\\0{branch}\\0{tags}\\0{desc|firstline}"))
-         (result (when parents
-                   (apply #'concat (mapcar #'vc-hgcmd--parent-info parents)))))
-    (concat
-     result
-     (with-temp-buffer
-       (when (vc-hgcmd--run-command (make-vc-hgcmd--command :command (list "summary") :output-buffer (current-buffer) :wait t))
+  (concat
+   (with-temp-buffer
+     (when (vc-hgcmd--run-command (make-vc-hgcmd--command :command (list "summary") :output-buffer (current-buffer) :wait t))
+       (apply #'concat
+        (let (result)
+          (goto-char (point-min))
+          (while (not (eobp))
+            (push
+             (let ((entry (cond
+                           ((looking-at " .*") (cons "" (match-string 0)))
+                           ((looking-at "\\(.*\\): \\(.*\\)") (cons (capitalize (match-string 1)) (match-string 2)))
+                           (t (cons "" (buffer-substring (point) (line-end-position)))))))
+               (concat
+                (propertize (format "%-11s: " (car entry)) 'face 'font-lock-type-face)
+                (propertize (cdr entry) 'face 'font-lock-variable-name-face)
+                "\n"))
+             result)
+            (forward-line))
+          (nreverse result)))))
+   (when vc-hgcmd-dir-show-shelve
+     (let ((shelves (vc-hgcmd-shelve-list)))
+       (when shelves
          (concat
-          (unless parents
-            (vc-hgcmd--summary-info "parent" "Parent     : "))
-          (vc-hgcmd--summary-info "branch" "Branch     : ")
-          (vc-hgcmd--summary-info "commit" "Commit     : ")
-          (vc-hgcmd--summary-info "update" "Update     : ")
-          (vc-hgcmd--summary-info "phases" "Phases     : "))))
-     (when vc-hgcmd-dir-show-shelve
-       (let ((shelves (vc-hgcmd-shelve-list)))
-         (when shelves
-           (concat
-            (propertize "Shelve     :\n" 'face 'font-lock-type-face)
-            (with-temp-buffer
-              (when (vc-hgcmd--run-command (make-vc-hgcmd--command :command (list "shelve" "-l") :output-buffer (current-buffer) :wait t))
-                (goto-char (point-min))
-                (mapconcat
-                 (lambda (shelve)
-                   (prog1
+          (propertize "Shelve     :\n" 'face 'font-lock-type-face)
+          (with-temp-buffer
+            (when (vc-hgcmd--run-command (make-vc-hgcmd--command :command (list "shelve" "-l") :output-buffer (current-buffer) :wait t))
+              (goto-char (point-min))
+              (mapconcat
+               (lambda (shelve)
+                 (prog1
+                     (propertize
+                      (concat
+                       "             "
+                       (propertize shelve 'face 'font-lock-variable-name-face)
                        (propertize
-                        (concat
-                         "             "
-                         (propertize shelve 'face 'font-lock-variable-name-face)
-                         (propertize
-                          (replace-regexp-in-string
-                           (concat "^" (regexp-quote shelve) "\s*")
-                           "   "
-                           (buffer-substring-no-properties (line-beginning-position) (line-end-position)))
-                          'face 'font-lock-comment-face))
-                        'mouse-face 'highlight
-                        'help-echo "mouse-3: Show shelve menu\nRET: Show shelve\nA: Unshelve and keep\nP: Unshelve and remove\nC-k: Delete shelve"
-                        'keymap vc-hgcmd-shelve-map
-                        'vc-hgcmd--shelve-name shelve)
-                     (forward-line)))
-                 shelves "\n"))))))))))
+                        (replace-regexp-in-string
+                         (concat "^" (regexp-quote shelve) "\s*")
+                         "   "
+                         (buffer-substring-no-properties (line-beginning-position) (line-end-position)))
+                        'face 'font-lock-comment-face))
+                      'mouse-face 'highlight
+                      'help-echo "mouse-3: Show shelve menu\nRET: Show shelve\nA: Unshelve and keep\nP: Unshelve and remove\nC-k: Delete shelve"
+                      'keymap vc-hgcmd-shelve-map
+                      'vc-hgcmd--shelve-name shelve)
+                   (forward-line)))
+               shelves "\n")))))))))
 
 (defun vc-hgcmd-shelve-list ()
   "Return shelve list."
