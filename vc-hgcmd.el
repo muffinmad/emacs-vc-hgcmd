@@ -747,7 +747,8 @@ Insert output to process buffer and check if amount of data is enought to parse 
   (concat
    (with-temp-buffer
      (when (vc-hgcmd--run-command (make-vc-hgcmd--command :command (list "summary") :output-buffer (current-buffer) :wait t))
-       (apply #'concat
+       (mapconcat
+        #'identity
         (let (result)
           (goto-char (point-min))
           (while (not (eobp))
@@ -757,15 +758,16 @@ Insert output to process buffer and check if amount of data is enought to parse 
                             (cons "" (buffer-substring (point) (line-end-position))))))
                (concat
                 (propertize (format "%-11s: " (car entry)) 'face 'font-lock-type-face)
-                (propertize (cdr entry) 'face 'font-lock-variable-name-face)
-                "\n"))
+                (propertize (cdr entry) 'face 'font-lock-variable-name-face)))
              result)
             (forward-line))
-          (nreverse result)))))
+          (nreverse result))
+        "\n")))
    (when vc-hgcmd-dir-show-shelve
      (let ((shelves (vc-hgcmd-shelve-list)))
        (when shelves
          (concat
+          "\n"
           (propertize "Shelve     :\n" 'face 'font-lock-type-face)
           (with-temp-buffer
             (when (vc-hgcmd--run-command (make-vc-hgcmd--command :command (list "shelve" "-l") :output-buffer (current-buffer) :wait t))
