@@ -752,10 +752,9 @@ Insert output to process buffer and check if amount of data is enought to parse 
           (goto-char (point-min))
           (while (not (eobp))
             (push
-             (let ((entry (cond
-                           ((looking-at " .*") (cons "" (match-string 0)))
-                           ((looking-at "\\(.*\\): \\(.*\\)") (cons (capitalize (match-string 1)) (match-string 2)))
-                           (t (cons "" (buffer-substring (point) (line-end-position)))))))
+             (let ((entry (if (looking-at "\\([^ ].*\\): \\(.*\\)")
+                              (cons (capitalize (match-string 1)) (match-string 2))
+                            (cons "" (buffer-substring (point) (line-end-position))))))
                (concat
                 (propertize (format "%-11s: " (car entry)) 'face 'font-lock-type-face)
                 (propertize (cdr entry) 'face 'font-lock-variable-name-face)
