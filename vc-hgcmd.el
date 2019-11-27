@@ -753,7 +753,7 @@ Insert output to process buffer and check if amount of data is enought to parse 
           (goto-char (point-min))
           (while (not (eobp))
             (push
-             (let ((entry (if (looking-at "\\([^ ].*\\): \\(.*\\)")
+             (let ((entry (if (looking-at "\\([^ ].*\\):\\s-+\\(.*\\)")
                               (cons (capitalize (match-string 1)) (match-string 2))
                             (cons "" (buffer-substring (point) (line-end-position))))))
                (concat
