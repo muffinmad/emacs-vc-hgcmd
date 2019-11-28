@@ -5,7 +5,7 @@
 ;; Author: Andrii Kolomoiets <andreyk.mad@gmail.com>
 ;; Keywords: vc
 ;; URL: https://github.com/muffinmad/emacs-vc-hgcmd
-;; Package-Version: 1.9.1
+;; Package-Version: 1.9.2
 ;; Package-Requires: ((emacs "25.1"))
 
 ;; This file is NOT part of GNU Emacs.
@@ -1026,27 +1026,28 @@ Insert output to process buffer and check if amount of data is enought to parse 
 (defun vc-hgcmd-print-log (files buffer &optional shortlog start-revision limit)
   "Put maybe SHORTLOG log of FILES to BUFFER starting with START-REVISION limited by LIMIT."
   ;; TODO short log
-  (let ((command
-         (nconc
-          (list "log")
-          (when shortlog (list "-G"))
-          (when start-revision
-            ;; start revision is used for branch log or specific revision log when limit is 1
-            (list (if (or vc-hgcmd--print-log-revset (eq limit 1)) "-r" "-b") start-revision))
-          (when limit (list "-l" (number-to-string limit)))
-          ;; file list not needed if limit is 1
-          (unless (eq limit 1)
-            (nconc
-             (unless shortlog (list "-f")) ; follow file renames
-             (unless (equal files (list default-directory)) (mapcar #'vc-hgcmd--file-relative-name files)))))))
-    ;; If limit is 1 or vc-log-show-limit then it is initial diff and better move to working revision
-    ;; otherwise remember point position and restore it later
-    (let ((p (with-current-buffer buffer (unless (or (member limit (list 1 vc-log-show-limit))) (point)))))
+  (with-current-buffer buffer
+    (let ((command
+           (nconc
+            (list "log")
+            (when shortlog (list "-G"))
+            (when start-revision
+              ;; start revision is used for branch log or specific revision log when limit is 1
+              (list (if (or vc-hgcmd--print-log-revset (eq limit 1)) "-r" "-b") start-revision))
+            (when limit (list "-l" (number-to-string limit)))
+            ;; file list not needed if limit is 1
+            (unless (eq limit 1)
+              (nconc
+               (unless shortlog (list "-f")) ; follow file renames
+               (unless (equal files (list default-directory)) (mapcar #'vc-hgcmd--file-relative-name files))))
+            (when (eq vc-log-view-type 'with-diff) (list "-p"))))
+          ;; If limit is 1 or vc-log-show-limit then it is initial diff and better move to working revision
+          ;; otherwise remember point position and restore it later
+          (p (unless (or (member limit (list 1 vc-log-show-limit))) (point))))
       (apply #'vc-hgcmd-command-to-buffer buffer command)
-      (with-current-buffer buffer
-        (if p
-            (goto-char p)
-          (unless start-revision (vc-hgcmd-show-log-entry nil)))))))
+      (if p
+          (goto-char p)
+        (unless start-revision (vc-hgcmd-show-log-entry nil))))))
 
 (defun vc-hgcmd-print-log-revset (revset)
   "Show the change log for REVSET."
