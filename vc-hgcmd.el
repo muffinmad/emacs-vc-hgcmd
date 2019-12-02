@@ -5,7 +5,7 @@
 ;; Author: Andrii Kolomoiets <andreyk.mad@gmail.com>
 ;; Keywords: vc
 ;; URL: https://github.com/muffinmad/emacs-vc-hgcmd
-;; Package-Version: 1.9.2
+;; Package-Version: 1.9.3
 ;; Package-Requires: ((emacs "25.1"))
 
 ;; This file is NOT part of GNU Emacs.
@@ -649,30 +649,31 @@ Insert output to process buffer and check if amount of data is enought to parse 
          (conflicted (mapcar #'car conflicted)))
     (goto-char (point-min))
     (while (not (eobp))
-      (let ((file (buffer-substring-no-properties (+ (point) 2) (line-end-position)))
-            (status (cdr (assoc (char-after) vc-hgcmd--translation-status))))
-        (unless (or (member file conflicted) (eq status 'origin))
-          (push (list
-                 file
-                 status
-                 (pcase status
-                   ('added (save-excursion
-                             (forward-line)
-                             (when (and (point-at-bol)
-                                        (eq 'origin (cdr (assoc (char-after) vc-hgcmd--translation-status))))
-                               (let ((origin (buffer-substring-no-properties (+ (point) 2) (line-end-position))))
-                                 (vc-hgcmd-create-extra-fileinfo
-                                  (if (re-search-forward (concat "^R " (regexp-quote origin) "$") nil t)
-                                      'renamed-from
-                                    'copied)
-                                  origin)))))
-                   ('removed (save-excursion
-                               (when (re-search-backward (concat "^  " (regexp-quote file) "$") nil t)
-                                 (forward-line -1)
-                                 (vc-hgcmd-create-extra-fileinfo
-                                  'renamed-to
-                                  (buffer-substring-no-properties (+ (point) 2) (line-end-position))))))))
-                result)))
+      (let ((status (cdr (assoc (char-after) vc-hgcmd--translation-status))))
+        (when status
+          (let ((file (buffer-substring-no-properties (+ (point) 2) (line-end-position))))
+            (unless (or (member file conflicted) (eq status 'origin))
+              (push (list
+                     file
+                     status
+                     (pcase status
+                       ('added (save-excursion
+                                 (forward-line)
+                                 (when (and (point-at-bol)
+                                            (eq 'origin (cdr (assoc (char-after) vc-hgcmd--translation-status))))
+                                   (let ((origin (buffer-substring-no-properties (+ (point) 2) (line-end-position))))
+                                     (vc-hgcmd-create-extra-fileinfo
+                                      (if (re-search-forward (concat "^R " (regexp-quote origin) "$") nil t)
+                                          'renamed-from
+                                        'copied)
+                                      origin)))))
+                       ('removed (save-excursion
+                                   (when (re-search-backward (concat "^  " (regexp-quote file) "$") nil t)
+                                     (forward-line -1)
+                                     (vc-hgcmd-create-extra-fileinfo
+                                      'renamed-to
+                                      (buffer-substring-no-properties (+ (point) 2) (line-end-position))))))))
+                    result)))))
       (forward-line))
     (funcall update-function result)))
 
