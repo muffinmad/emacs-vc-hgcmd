@@ -5,7 +5,7 @@
 ;; Author: Andrii Kolomoiets <andreyk.mad@gmail.com>
 ;; Keywords: vc
 ;; URL: https://github.com/muffinmad/emacs-vc-hgcmd
-;; Package-Version: 1.9.3
+;; Package-Version: 1.9.4
 ;; Package-Requires: ((emacs "25.1"))
 
 ;; This file is NOT part of GNU Emacs.
@@ -125,7 +125,7 @@
 ;;
 ;; - Default pull arguments
 ;; You can customize default hg pull command arguments.
-;; By default it's --update. You can change it for particular pull by invoking `vc-pull' with prefix argument.
+;; By default it's --update.  You can change it for particular pull by invoking `vc-pull' with prefix argument.
 ;;
 ;; - Branches and tags as revision completion table
 ;; Instead of list of all revisions of file vc-hgcmd provides list of named branches and tags.
@@ -202,7 +202,7 @@
                                                "ui.editor=emacsclient -a emacs"
                                                "extensions.shelve=")
   "Config options for command server.
-Specify options in form <option>=<value>. It will be passed to hg with --config argument."
+Specify options in form <option>=<value>.  It will be passed to hg with --config argument."
   :type '(repeat string))
 
 (defcustom vc-hgcmd-cmdserver-process-environment nil
@@ -502,7 +502,7 @@ Insert output to process buffer and check if amount of data is enought to parse 
         t))))
 
 (defun vc-hgcmd--command (skip-error &rest command)
-  "Run hg COMMAND and return it's output. If SKIP-ERROR is non nil data on error channel will be omited."
+  "Run hg COMMAND and return it's output.  If SKIP-ERROR is non nil data on error channel will be omited."
   (with-temp-buffer
     (let ((cmd (make-vc-hgcmd--command :command command :output-buffer (current-buffer) :wait t :skip-error skip-error)))
       (when (vc-hgcmd--run-command cmd)
@@ -885,7 +885,7 @@ Insert output to process buffer and check if amount of data is enought to parse 
   (vc-dir-refresh))
 
 (defun vc-hgcmd-working-revision (file)
-  "Working revision of FILE. Result is revision of FILE up to repository revision."
+  "Working revision of FILE.  Result is revision of FILE up to repository revision."
   (let* ((reporev (car-safe (split-string (vc-hgcmd-command "id" "-n") "+")))
          (filerev (when file
                     (vc-hgcmd-command
@@ -1005,14 +1005,14 @@ Insert output to process buffer and check if amount of data is enought to parse 
        (list "merge")))))
 
 (defun vc-hgcmd-pull (prompt)
-  "Pull. Prompt for args if PROMPT."
+  "Pull.  Prompt for args if PROMPT."
   (vc-hgcmd-command-update-callback
    (nconc
     (list "pull")
     (split-string-and-unquote (if prompt (read-from-minibuffer "Hg pull: " vc-hgcmd-pull-args) vc-hgcmd-pull-args)))))
 
 (defun vc-hgcmd-push (prompt)
-  "Pull. Prompt for args if PROMPT."
+  "Pull.  Prompt for args if PROMPT."
   (vc-hgcmd-command-update-callback
    (nconc
     (list "push")
@@ -1027,25 +1027,26 @@ Insert output to process buffer and check if amount of data is enought to parse 
 (defun vc-hgcmd-print-log (files buffer &optional shortlog start-revision limit)
   "Put maybe SHORTLOG log of FILES to BUFFER starting with START-REVISION limited by LIMIT."
   ;; TODO short log
-  (with-current-buffer buffer
-    (let ((command
-           (nconc
-            (list "log")
-            (when shortlog (list "-G"))
-            (when start-revision
-              ;; start revision is used for branch log or specific revision log when limit is 1
-              (list (if (or vc-hgcmd--print-log-revset (eq limit 1)) "-r" "-b") start-revision))
-            (when limit (list "-l" (number-to-string limit)))
-            ;; file list not needed if limit is 1
-            (unless (eq limit 1)
-              (nconc
-               (unless shortlog (list "-f")) ; follow file renames
-               (unless (equal files (list default-directory)) (mapcar #'vc-hgcmd--file-relative-name files))))
-            (when (eq vc-log-view-type 'with-diff) (list "-p"))))
-          ;; If limit is 1 or vc-log-show-limit then it is initial diff and better move to working revision
-          ;; otherwise remember point position and restore it later
-          (p (unless (or (member limit (list 1 vc-log-show-limit))) (point))))
-      (apply #'vc-hgcmd-command-to-buffer buffer command)
+  (let ((command
+         (nconc
+          (list "log")
+          (when shortlog (list "-G"))
+          (when start-revision
+            ;; start revision is used for branch log or specific revision log when limit is 1
+            (list (if (or vc-hgcmd--print-log-revset (eq limit 1)) "-r" "-b") start-revision))
+          (when limit (list "-l" (number-to-string limit)))
+          ;; file list not needed if limit is 1
+          (unless (eq limit 1)
+            (nconc
+             (unless shortlog (list "-f")) ; follow file renames
+             (unless (equal files (list default-directory)) (mapcar #'vc-hgcmd--file-relative-name files))))
+          (when (eq vc-log-view-type 'with-diff) (list "-p"))))
+        ;; If limit is 1 or vc-log-show-limit then it is initial diff and better move to working revision
+        ;; otherwise remember point position and restore it later
+        (p (unless (or (member limit (list 1 vc-log-show-limit)))
+             (with-current-buffer buffer (point)))))
+    (apply #'vc-hgcmd-command-to-buffer buffer command)
+    (with-current-buffer buffer
       (if p
           (goto-char p)
         (unless start-revision (vc-hgcmd-show-log-entry nil))))))
@@ -1145,7 +1146,7 @@ With prefix argument, ask for 'log' command arguments."
 (declare-function log-view-current-tag "log-view" (&optional pos))
 
 (defun vc-hgcmd--diff-revision (pos files)
-  "Show change made by revision at POS for FILES. If FILES is nil show diff for whole changeset."
+  "Show change made by revision at POS for FILES.  If FILES is nil show diff for whole changeset."
   (vc-diff-internal t (list log-view-vc-backend files) nil (log-view-current-tag pos)))
 
 (defun vc-hgcmd-diff-revision (pos)
@@ -1302,7 +1303,7 @@ If FILES is nil show diff for whole changeset."
                     (cdr font-lock-defaults))))
 
 (defun vc-hgcmd-create-tag (_dir name branchp)
-  "Create tag NAME. If BRANCHP create named branch."
+  "Create tag NAME.  If BRANCHP create named branch."
   (vc-hgcmd-command (if branchp "branch" "tag") name))
 
 (defun vc-hgcmd-retrieve-tag (_dir name _update)
@@ -1369,7 +1370,7 @@ If FILES is nil show diff for whole changeset."
   (log-edit-toggle-header "Close-branch" "yes"))
 
 (defun vc-hgcmd-log-edit-toggle-amend ()
-  "Toggle --amend commit option. If on, insert commit message of the previous commit."
+  "Toggle --amend commit option.  If on, insert commit message of the previous commit."
   (interactive)
   (when (log-edit-toggle-header "Amend" "yes")
     (log-edit-set-header "Summary" (vc-hgcmd-command "log" "-l" "1" "--template" "{desc}"))))
@@ -1403,7 +1404,7 @@ If FILES is nil show diff for whole changeset."
     (and out (eq (aref out 0) ?U))))
 
 (defun vc-hgcmd--after-save-hook ()
-  "After save hook. Mark file as resolved if vc state eq conflict and no smerge mode."
+  "After save hook.  Mark file as resolved if vc state eq conflict and no smerge mode."
   (when (and buffer-file-name
              (not (save-excursion
                     (goto-char (point-min))
@@ -1413,7 +1414,7 @@ If FILES is nil show diff for whole changeset."
     (remove-hook 'after-save-hook #'vc-hgcmd--after-save-hook t)))
 
 (defun vc-hgcmd-find-file-hook ()
-  "Find file hook. Start smerge session if vc state eq conflict."
+  "Find file hook.  Start smerge session if vc state eq conflict."
   (when (and buffer-file-name
              (eq (vc-state buffer-file-name 'Hgcmd) 'conflict))
     (smerge-start-session)
