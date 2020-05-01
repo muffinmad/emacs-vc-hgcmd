@@ -16,7 +16,7 @@ Because communicating with single `hg` process over pipe is much faster than sta
 
 #### Graph log
 
-Graph log is used when viewing branch or root log.
+Graph log is used by default when viewing branch or root log.
 
 #### Conflict status for a file
 

@@ -60,7 +60,7 @@
 ;; - mark-resolved (files)                         OK
 ;; - find-admin-dir (file)                         NO is this .hg dir?
 ;; HISTORY FUNCTIONS
-;; * print-log (files buffer &optional shortlog start-revision limit)  OK but graph log if shortlog
+;; * print-log (files buffer &optional shortlog start-revision limit)  OK
 ;; * log-outgoing (backend remote-location)        OK
 ;; * log-incoming (backend remote-location)        OK
 ;; - log-search (buffer pattern)                   OK
@@ -231,6 +231,33 @@ same branch was merged."
 (defcustom vc-hgcmd-dir-show-shelve t
   "Show current shelves in `vc-dir' buffer."
   :type '(boolean))
+
+(defcustom vc-hgcmd-short-log-graph t
+  "Use graph in short log."
+  :type '(boolean))
+
+(defcustom vc-hgcmd-short-log-format
+  '("{rev}:{branch}: {author|person} {date|shortdate} {desc|firstline}\\n"
+    "^\\(?:[-o@_x*+|: /\\]*\\)\\(%s\\):\\([^:]+\\): \\(.*?\\) \
+\\([0-9]\\{4\\}-[0-9]\\{2\\}-[0-9]\\{2\\}\\)"
+    ((1 'log-view-message)
+     (2 'change-log-file)
+     (3 'change-log-name)
+     (4 'change-log-date)))
+  "Log template when viewing short log.
+This should be a list (TEMPLATE REGEXP KEYWORDS), where TEMPLATE
+is the \"--template\" argument string to pass to \"hg log\",
+REGEXP is a regular expression matching the resulting
+output, and KEYWORDS is a list of `font-lock-keywords' for
+highlighting the Log View buffer.
+
+REGEXP will be used to find revision with specific
+number in log view, so write \"%s\" instead of \"[0-9]+\"
+as revision number.
+
+Note that revision number must be group 1."
+
+  :type '(list string regexp (repeat sexp)))
 
 ;;;; Modes
 
@@ -1026,11 +1053,12 @@ Insert output to process buffer and check if amount of data is enought to parse 
 
 (defun vc-hgcmd-print-log (files buffer &optional shortlog start-revision limit)
   "Put maybe SHORTLOG log of FILES to BUFFER starting with START-REVISION limited by LIMIT."
-  ;; TODO short log
   (let ((command
          (nconc
           (list "log")
-          (when shortlog (list "-G"))
+          (when shortlog
+            `(,@(when vc-hgcmd-short-log-graph '("-G"))
+              "--template" ,(car vc-hgcmd-short-log-format)))
           (when start-revision
             ;; start revision is used for branch log or specific revision log when limit is 1
             (list (if (or vc-hgcmd--print-log-revset (eq limit 1)) "-r" "-b") start-revision))
@@ -1091,12 +1119,7 @@ With prefix argument, ask for 'log' command arguments."
                 (list "-k" pattern))))
     (apply #'vc-hgcmd-command-to-buffer buffer (nconc (list "log") args))))
 
-(defun vc-hgcmd--graph-data-re (re)
-  "Add graph data re to RE."
-  (concat "^\\(?:[o@_x*+-~|/: ]*\\)" re))
-
-(defconst vc-hgcmd--message-re (vc-hgcmd--graph-data-re "changeset:\\s-*\\(%s\\):\\([[:xdigit:]]+\\)"))
-(defconst vc-hgcmd--log-view-message-re (format vc-hgcmd--message-re "[[:digit:]]+"))
+(defconst vc-hgcmd--message-re "^changeset:\\s-*\\(%s\\):\\([[:xdigit:]]+\\)")
 (defvar log-view-per-file-logs)
 (defvar log-view-message-re)
 (defvar log-view-font-lock-keywords)
@@ -1114,22 +1137,30 @@ With prefix argument, ask for 'log' command arguments."
     map))
 
 (define-derived-mode vc-hgcmd-log-view-mode log-view-mode "Log-View/Hgcmd"
+  ;; TODO log-view-expanded-log-entry-function
   (require 'add-log)
   (set (make-local-variable 'log-view-per-file-logs) nil)
-  (set (make-local-variable 'log-view-message-re) vc-hgcmd--log-view-message-re)
+  (set (make-local-variable 'log-view-message-re)
+       (format (if (eq vc-log-view-type 'short)
+                   (cadr vc-hgcmd-short-log-format)
+                 vc-hgcmd--message-re)
+               "[[:digit:]]+"))
   (set (make-local-variable 'log-view-font-lock-keywords)
-       (append
-        log-view-font-lock-keywords
-        `(
-          (,(vc-hgcmd--graph-data-re "user:[ \t]+\\([^<(]+?\\)[ \t]*[(<]\\([A-Za-z0-9_.+-]+@[A-Za-z0-9_.-]+\\)[>)]")
-	       (1 'change-log-name)
-	       (2 'change-log-email))
-	      (,(vc-hgcmd--graph-data-re "user:[ \t]+\\([A-Za-z0-9_.+-]+\\(?:@[A-Za-z0-9_.-]+\\)?\\)")
-	       (1 'change-log-email))
-	      (,(vc-hgcmd--graph-data-re "date: \\(.+\\)") (1 'change-log-date))
-          (,(vc-hgcmd--graph-data-re "parent:[ \t]+\\([[:digit:]]+:[[:xdigit:]]+\\)") (1 'change-log-acknowledgment))
-	      (,(vc-hgcmd--graph-data-re "tag: +\\([^ ]+\\)$") (1 'highlight))
-	      (,(vc-hgcmd--graph-data-re "summary:[ \t]+\\(.+\\)") (1 'log-view-message))))))
+       (if (eq vc-log-view-type 'short)
+           (list (cons (format (nth 1 vc-hgcmd-short-log-format) "[[:digit:]]+")
+                       (nth 2 vc-hgcmd-short-log-format)))
+         (append
+          log-view-font-lock-keywords
+          '(
+            ("user:[ \t]+\\([^<(]+?\\)[ \t]*[(<]\\([A-Za-z0-9_.+-]+@[A-Za-z0-9_.-]+\\)[>)]"
+	         (1 'change-log-name)
+	         (2 'change-log-email))
+	        ("user:[ \t]+\\([A-Za-z0-9_.+-]+\\(?:@[A-Za-z0-9_.-]+\\)?\\)"
+	         (1 'change-log-email))
+	        ("date: \\(.+\\)" (1 'change-log-date))
+            ("parent:[ \t]+\\([[:digit:]]+:[[:xdigit:]]+\\)" (1 'change-log-acknowledgment))
+	        ("tag: +\\([^ ]+\\)$" (1 'highlight))
+	        ("summary:[ \t]+\\(.+\\)" (1 'log-view-message)))))))
 
 (defun vc-hgcmd-show-log-entry (revision)
   "Show log entry positioning on REVISION."
@@ -1137,11 +1168,14 @@ With prefix argument, ask for 'log' command arguments."
   ;; if 'changeset: revision' not found try move to working rev but return nil
   ;; because revision is not found
   (goto-char (point-min))
-  (if (search-forward-regexp (format vc-hgcmd--message-re revision) nil t)
-      (goto-char (match-beginning 0))
-    (when (search-forward-regexp (format vc-hgcmd--message-re (vc-hgcmd-working-revision nil)) nil t)
-      (goto-char (match-beginning 0))
-      nil)))
+  (let ((re (if (eq vc-log-view-type 'short)
+                (cadr vc-hgcmd-short-log-format)
+              vc-hgcmd--message-re)))
+    (if (search-forward-regexp (format re revision) nil t)
+        (goto-char (match-beginning 0))
+      (when (search-forward-regexp (format re (vc-hgcmd-working-revision nil)) nil t)
+        (goto-char (match-beginning 0))
+        nil))))
 
 (declare-function log-view-current-tag "log-view" (&optional pos))
 
