@@ -1125,6 +1125,7 @@ With prefix argument, ask for 'log' command arguments."
 (defvar log-view-font-lock-keywords)
 (defvar log-view-vc-backend)
 (defvar log-view-vc-fileset)
+(defvar log-view-expanded-log-entry-function)
 
 (defvar vc-hgcmd-log-view-mode-map
   (let ((map (make-sparse-keymap)))
@@ -1145,6 +1146,9 @@ With prefix argument, ask for 'log' command arguments."
                    (cadr vc-hgcmd-short-log-format)
                  vc-hgcmd--message-re)
                "[[:digit:]]+"))
+  (when (eq vc-log-view-type 'short)
+    (set (make-local-variable 'log-view-expanded-log-entry-function)
+         #'vc-hgcmd-expanded-log-entry))
   (set (make-local-variable 'log-view-font-lock-keywords)
        (if (eq vc-log-view-type 'short)
            (list (cons (format (nth 1 vc-hgcmd-short-log-format) "[[:digit:]]+")
@@ -1176,6 +1180,10 @@ With prefix argument, ask for 'log' command arguments."
       (when (search-forward-regexp (format re (vc-hgcmd-working-revision nil)) nil t)
         (goto-char (match-beginning 0))
         nil))))
+
+(defun vc-hgcmd-expanded-log-entry (revision)
+  "Show log entry for REVISION."
+  (concat (vc-hgcmd-command "log" "-v" "-r" revision) "\n"))
 
 (declare-function log-view-current-tag "log-view" (&optional pos))
 
