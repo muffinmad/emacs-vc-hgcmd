@@ -5,7 +5,7 @@
 ;; Author: Andrii Kolomoiets <andreyk.mad@gmail.com>
 ;; Keywords: vc
 ;; URL: https://github.com/muffinmad/emacs-vc-hgcmd
-;; Package-Version: 1.9.4
+;; Package-Version: 1.10
 ;; Package-Requires: ((emacs "25.1"))
 
 ;; This file is NOT part of GNU Emacs.
@@ -1138,7 +1138,6 @@ With prefix argument, ask for 'log' command arguments."
     map))
 
 (define-derived-mode vc-hgcmd-log-view-mode log-view-mode "Log-View/Hgcmd"
-  ;; TODO log-view-expanded-log-entry-function
   (require 'add-log)
   (set (make-local-variable 'log-view-per-file-logs) nil)
   (set (make-local-variable 'log-view-message-re)
