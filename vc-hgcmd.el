@@ -5,7 +5,7 @@
 ;; Author: Andrii Kolomoiets <andreyk.mad@gmail.com>
 ;; Keywords: vc
 ;; URL: https://github.com/muffinmad/emacs-vc-hgcmd
-;; Package-Version: 1.10
+;; Package-Version: 1.11
 ;; Package-Requires: ((emacs "25.1"))
 
 ;; This file is NOT part of GNU Emacs.
@@ -258,6 +258,46 @@ as revision number.
 
 Note that revision number must be group 1."
   :type '(list string regexp (repeat sexp)))
+
+(defcustom vc-hgcmd-checkin-switches t
+  "A string or list of strings specifying extra switches for checkin.
+These are passed to the \"hg commit\" command."
+  :type '(choice (const :tag "Unspecified" nil)
+                 (const :tag "None" t)
+                 (string :tag "Argument String")
+                 (repeat :tag "Argument List" :value ("") string)))
+
+(defcustom vc-hgcmd-checkout-switches t
+  "A string or list of strings specifying extra switches for checkout.
+These are passed to the \"hg cat\" command."
+  :type '(choice (const :tag "Unspecified" nil)
+                 (const :tag "None" t)
+                 (string :tag "Argument String")
+                 (repeat :tag "Argument List" :value ("") string)))
+
+(defcustom vc-hgcmd-register-switches t
+  "A string or list of strings; extra switches for registering a file.
+These are passed to the \"hg add\" command."
+  :type '(choice (const :tag "Unspecified" nil)
+                 (const :tag "None" t)
+                 (string :tag "Argument String")
+                 (repeat :tag "Argument List" :value ("") string)))
+
+(defcustom vc-hgcmd-diff-switches t
+  "A string or list of strings specifying switches for diff.
+These are passed to the \"hg diff\" command."
+  :type '(choice (const :tag "Unspecified" nil)
+                 (const :tag "None" t)
+                 (string :tag "Argument String")
+                 (repeat :tag "Argument List" :value ("") string)))
+
+(defcustom vc-hgcmd-annotate-switches t
+  "A string or list of strings specifying switches for annotate.
+These are passed to the \"hg annotate\" command."
+  :type '(choice (const :tag "Unspecified" nil)
+                 (const :tag "None" t)
+                 (string :tag "Argument String")
+                 (repeat :tag "Argument List" :value ("") string)))
 
 
 ;;;; Modes
@@ -614,6 +654,14 @@ Insert output to process buffer and check if amount of data is enought to parse 
 ;;;; VC backend
 
 
+(autoload 'vc-switches "vc")
+
+(defun vc-hgcmd--switches (operation)
+  "Return switch list for OPERATION."
+  (let ((switches (vc-switches 'hgcmd operation)))
+    (when switches
+      (mapcan #'split-string-and-unquote switches))))
+
 (defun vc-hgcmd-revision-granularity ()
   "Per-repository revision number."
   'repository)
@@ -724,16 +772,16 @@ Insert output to process buffer and check if amount of data is enought to parse 
   (let ((map (make-sparse-keymap)))
     (define-key map [hgcmd-sl]
       '(menu-item "Create shelve..." vc-hgcmd-shelve
-		          :help "Shelve changes"))
+                  :help "Shelve changes"))
     (define-key map [hgcmd-uc]
       '(menu-item "Continue unshelve" vc-hgcmd-shelve-unshelve-continue
-		          :help "Continue unshelve"))
+                  :help "Continue unshelve"))
     (define-key map [hgcmd-ua]
       '(menu-item "Abort unshelve" vc-hgcmd-shelve-unshelve-abort
-		          :help "Abort unshelve"))
+                  :help "Abort unshelve"))
     (define-key map [hgcmd-ar]
       '(menu-item "Addremove" vc-hgcmd-addremove
-		          :help "Add new and remove missing files"))
+                  :help "Add new and remove missing files"))
     map))
 
 (defun vc-hgcmd-extra-menu ()
@@ -761,16 +809,16 @@ Insert output to process buffer and check if amount of data is enought to parse 
   (let ((map (make-sparse-keymap "Hg shelve")))
     (define-key map [de]
       '(menu-item "Delete shelve" vc-hgcmd-shelve-delete-at-point
-		          :help "Delete the current shelve"))
+                  :help "Delete the current shelve"))
     (define-key map [ap]
       '(menu-item "Unshelve and keep shelve" vc-hgcmd-shelve-apply-at-point
-		          :help "Apply the current shelve and keep it in the shelve list"))
+                  :help "Apply the current shelve and keep it in the shelve list"))
     (define-key map [po]
       '(menu-item "Unshelve and remove shelve" vc-hgcmd-shelve-pop-at-point
-		          :help "Apply the current shelve and remove it"))
+                  :help "Apply the current shelve and remove it"))
     (define-key map [sh]
       '(menu-item "Show shelve" vc-hgcmd-shelve-show-at-point
-		          :help "Show the contents of the current shelve"))
+                  :help "Show the contents of the current shelve"))
     map))
 
 (defun vc-hgcmd-dir-extra-headers (_dir)
@@ -933,38 +981,38 @@ Insert output to process buffer and check if amount of data is enought to parse 
 (defun vc-hgcmd-mode-line-string (file)
   "Return a string for `vc-mode-line' to put in the mode line for FILE."
   (let* ((state (vc-state file))
-	     (state-echo nil)
-	     (face nil)
+         (state-echo nil)
+         (face nil)
          ;; TODO allow to customize it.
-	     (branch (vc-hgcmd-command "branch")))
+         (branch (vc-hgcmd-command "branch")))
     (propertize
      (concat
       "Hgcmd"
       (cond
        ((eq state 'up-to-date)
         (setq state-echo "Up to date file")
-	    (setq face 'vc-up-to-date-state)
-	    "-")
+        (setq face 'vc-up-to-date-state)
+        "-")
        ((eq state 'added)
         (setq state-echo "Locally added file")
-	    (setq face 'vc-locally-added-state)
+        (setq face 'vc-locally-added-state)
         "@")
        ((eq state 'conflict)
         (setq state-echo "File contains conflicts after the last merge")
-	    (setq face 'vc-conflict-state)
+        (setq face 'vc-conflict-state)
         "!")
        ((eq state 'removed)
         (setq state-echo "File removed from the VC system")
-	    (setq face 'vc-removed-state)
+        (setq face 'vc-removed-state)
         "!")
        ((eq state 'missing)
         (setq state-echo "File tracked by the VC system, but missing from the file system")
-	    (setq face 'vc-missing-state)
+        (setq face 'vc-missing-state)
         "?")
-	   (t
-	    (setq state-echo "Locally modified file")
-	    (setq face 'vc-edited-state)
-	    ":"))
+       (t
+        (setq state-echo "Locally modified file")
+        (setq face 'vc-edited-state)
+        ":"))
       branch)
      'face face
      'help-echo (concat state-echo " under the Hg version control system"))))
@@ -977,7 +1025,10 @@ Insert output to process buffer and check if amount of data is enought to parse 
 
 (defun vc-hgcmd-register (files &optional _comment)
   "Register FILES."
-  (apply #'vc-hgcmd-command (nconc (list "add") (mapcar #'vc-hgcmd--file-relative-name files))))
+  (apply #'vc-hgcmd-command (nconc
+                             (list "add")
+                             (vc-hgcmd--switches 'register)
+                             (mapcar #'vc-hgcmd--file-relative-name files))))
 
 (defalias 'vc-hgcmd-responsible-p 'vc-hgcmd-root)
 
@@ -1001,7 +1052,9 @@ Insert output to process buffer and check if amount of data is enought to parse 
   "Commit FILES with COMMENT."
   (apply #'vc-hgcmd-command
          (nconc
-          (list "commit" "-m")
+          (list "commit")
+          (vc-hgcmd--switches 'checkin)
+          (list "-m")
           (log-edit-extract-headers `(("Author" . "--user")
                                       ("Date" . "--date")
                                       ("Amend" . vc-hgcmd--arg-amend)
@@ -1009,17 +1062,24 @@ Insert output to process buffer and check if amount of data is enought to parse 
                                     comment)
           (mapcar #'vc-hgcmd--file-relative-name files))))
 
-(defun vc-hgcmd-find-revision (file rev buffer)
-  "Put REV of FILE to BUFFER."
+(defun vc-hgcmd-find-revision (file rev buffer &optional args)
+  "Put REV of FILE to BUFFER.
+Optional ARGS passed to the \"cat\" command."
   (let ((file (vc-hgcmd--file-relative-name file)))
     (apply #'vc-hgcmd-command-to-buffer buffer
            (if rev
-               (nconc (list "cat" "-r" rev) (vc-hgcmd--file-name-at-rev (list file) rev))
-             (list "cat" file)))))
+               (nconc
+                (list "cat")
+                args
+                (list "-r" rev)
+                (vc-hgcmd--file-name-at-rev (list file) rev))
+             (nconc '("cat") args (list file))))))
 
 (defun vc-hgcmd-checkout (file &optional rev)
   "Retrieve revision REV of FILE."
-  (vc-hgcmd-find-revision file rev (or (get-file-buffer file) (current-buffer))))
+  (vc-hgcmd-find-revision file rev
+                          (or (get-file-buffer file) (current-buffer))
+                          (vc-hgcmd--switches 'checkout)))
 
 (defun vc-hgcmd-revert (file &optional contents-done)
   "Revert FILE if not CONTENTS-DONE."
@@ -1159,14 +1219,14 @@ With prefix argument, ask for 'log' command arguments."
           log-view-font-lock-keywords
           '(
             ("user:[ \t]+\\([^<(]+?\\)[ \t]*[(<]\\([A-Za-z0-9_.+-]+@[A-Za-z0-9_.-]+\\)[>)]"
-	         (1 'change-log-name)
-	         (2 'change-log-email))
-	        ("user:[ \t]+\\([A-Za-z0-9_.+-]+\\(?:@[A-Za-z0-9_.-]+\\)?\\)"
-	         (1 'change-log-email))
-	        ("date: \\(.+\\)" (1 'change-log-date))
+             (1 'change-log-name)
+             (2 'change-log-email))
+            ("user:[ \t]+\\([A-Za-z0-9_.+-]+\\(?:@[A-Za-z0-9_.-]+\\)?\\)"
+             (1 'change-log-email))
+            ("date: \\(.+\\)" (1 'change-log-date))
             ("parent:[ \t]+\\([[:digit:]]+:[[:xdigit:]]+\\)" (1 'change-log-acknowledgment))
-	        ("tag: +\\([^ ]+\\)$" (1 'highlight))
-	        ("summary:[ \t]+\\(.+\\)" (1 'log-view-message)))))))
+            ("tag: +\\([^ ]+\\)$" (1 'highlight))
+            ("summary:[ \t]+\\(.+\\)" (1 'log-view-message)))))))
 
 (defun vc-hgcmd-show-log-entry (revision)
   "Show log entry positioning on REVISION."
@@ -1237,6 +1297,7 @@ If FILES is nil show diff for whole changeset."
   "Place diff of FILES between REV1 and REV2 into BUFFER."
   (let ((command (nconc
                   (list "diff")
+                  (vc-hgcmd--switches 'diff)
                   (when rev1 (list "-r" rev1))
                   (when rev2 (list (if rev1 "-r" "-c") rev2))
                   (when (and files (not (equal files (list default-directory))))
@@ -1273,7 +1334,9 @@ If FILES is nil show diff for whole changeset."
   "Annotate REVISION of FILE to BUFFER."
   (apply #'vc-hgcmd-command-to-buffer buffer
          (nconc
-          (list "annotate" "-qdnu")
+          (list "annotate")
+          (vc-hgcmd--switches 'annotate)
+          (list "-qdnu")
           (when revision (list "-r" revision))
           (vc-hgcmd--file-name-at-rev (list (vc-hgcmd--file-relative-name file)) revision))))
 
