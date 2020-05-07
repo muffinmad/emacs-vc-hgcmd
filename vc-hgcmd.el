@@ -180,6 +180,7 @@
 
 (require 'bindat)
 (require 'cl-lib)
+(require 'diff-mode)
 (require 'seq)
 (require 'subr-x)
 (require 'vc)
@@ -256,8 +257,8 @@ number in log view, so write \"%s\" instead of \"[0-9]+\"
 as revision number.
 
 Note that revision number must be group 1."
-
   :type '(list string regexp (repeat sexp)))
+
 
 ;;;; Modes
 
@@ -609,7 +610,9 @@ Insert output to process buffer and check if amount of data is enought to parse 
   "Return FILE file name relative to vc root."
   (file-relative-name file (vc-hgcmd-root file)))
 
+
 ;;;; VC backend
+
 
 (defun vc-hgcmd-revision-granularity ()
   "Per-repository revision number."
@@ -1302,8 +1305,6 @@ If FILES is nil show diff for whole changeset."
     (with-current-buffer buffer
       (goto-char (point-min)))
     (select-window (display-buffer buffer))))
-
-(require 'diff-mode)
 
 (defvar vc-hgcmd--log-view-region-history-font-lock-keywords nil)
 (defvar font-lock-keywords)
