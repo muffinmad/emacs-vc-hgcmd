@@ -1,6 +1,6 @@
 ;;; vc-hgcmd.el --- VC mercurial backend that uses hg command server -*- lexical-binding: t -*-
 
-;; Copyright (C) 2018-2019 Andrii Kolomoiets
+;; Copyright (C) 2018-2020 Andrii Kolomoiets
 
 ;; Author: Andrii Kolomoiets <andreyk.mad@gmail.com>
 ;; Keywords: vc
