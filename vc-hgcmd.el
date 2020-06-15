@@ -5,7 +5,7 @@
 ;; Author: Andrii Kolomoiets <andreyk.mad@gmail.com>
 ;; Keywords: vc
 ;; URL: https://github.com/muffinmad/emacs-vc-hgcmd
-;; Package-Version: 1.11
+;; Package-Version: 1.12
 ;; Package-Requires: ((emacs "25.1"))
 
 ;; This file is NOT part of GNU Emacs.
@@ -95,6 +95,7 @@
 ;; - extra-menu ()                                 OK shelve, addremove
 ;; - extra-dir-menu ()                             OK extra-status-menu same as extra-menu
 ;; - conflicted-files (dir)                        OK with no respect to DIR
+;; - repository-url (file-or-dir)                  OK
 ;;
 ;; VC backend to work with hg repositories through hg command server.
 ;; https://www.mercurial-scm.org/wiki/CommandServer
@@ -1542,6 +1543,11 @@ If FILES is nil show diff for whole changeset."
 (defun vc-hgcmd-find-ignore-file (file)
   "Return the ignore file of the repository of FILE."
   (expand-file-name ".hgignore" (vc-hgcmd-root file)))
+
+(defun vc-hgcmd-repository-url (file-or-dir &optional remote)
+  "Return the URL of REMOTE or default repository of FILE-OR-DIR."
+  (let ((default-directory (vc-hgcmd-root file-or-dir)))
+    (vc-hgcmd-command "config" (concat "paths." (or remote "default")))))
 
 (defun vc-hgcmd-runcommand (command)
   "Run custom hg COMMAND."
