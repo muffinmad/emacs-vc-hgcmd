@@ -5,7 +5,7 @@
 ;; Author: Andrii Kolomoiets <andreyk.mad@gmail.com>
 ;; Keywords: vc
 ;; URL: https://github.com/muffinmad/emacs-vc-hgcmd
-;; Package-Version: 1.12
+;; Package-Version: 1.13
 ;; Package-Requires: ((emacs "25.1"))
 
 ;; This file is NOT part of GNU Emacs.
@@ -1089,7 +1089,7 @@ Optional ARGS passed to the \"cat\" command."
 
 (defun vc-hgcmd-merge-branch ()
   "Merge."
-  (let ((branch (completing-read "Merge from branch: " (vc-hgcmd-revision-completion-table))))
+  (let ((branch (vc-read-revision "Revision to merge: ")))
     (vc-hgcmd-command-update-callback
      (if (> (length branch) 0)
          (list "merge" branch)
