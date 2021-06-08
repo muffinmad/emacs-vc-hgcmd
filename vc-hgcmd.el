@@ -1,11 +1,11 @@
 ;;; vc-hgcmd.el --- VC mercurial backend that uses hg command server -*- lexical-binding: t -*-
 
-;; Copyright (C) 2018-2020 Andrii Kolomoiets
+;; Copyright (C) 2018-2021 Free Software Foundation, Inc.
 
 ;; Author: Andrii Kolomoiets <andreyk.mad@gmail.com>
 ;; Keywords: vc
 ;; URL: https://github.com/muffinmad/emacs-vc-hgcmd
-;; Package-Version: 1.13
+;; Package-Version: 1.14
 ;; Package-Requires: ((emacs "25.1"))
 
 ;; This file is NOT part of GNU Emacs.
