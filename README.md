@@ -1,4 +1,5 @@
 [![License GPL 3](https://img.shields.io/badge/license-GPL_3-green.svg)](http://www.gnu.org/copyleft/gpl.html)
+[![ELPA](http://elpa.gnu.org/packages/vc-hgcmd.svg)](http://elpa.gnu.org/packages/vc-hgcmd.html)
 [![MELPA](http://melpa.org/packages/vc-hgcmd-badge.svg)](http://melpa.org/#/vc-hgcmd)
 [![MELPA Stable](http://stable.melpa.org/packages/vc-hgcmd-badge.svg)](http://stable.melpa.org/#/vc-hgcmd)
 
@@ -108,7 +109,7 @@ Command `vc-hgcmd-print-log-revset` allows to print log for revset, e.g. `branch
 
 ### 1. Install package
 
-`vc-hgcmd` available on [MELPA](http://melpa.org):
+`vc-hgcmd` available on [ELPA](http://elpa.gnu.org) and [MELPA](http://melpa.org):
 
 <kbd>M-x</kbd> `package-install` <kbd>RET</kbd> `vc-hgcmd` <kbd>RET</kbd>.
 
