@@ -5,7 +5,7 @@
 ;; Author: Andrii Kolomoiets <andreyk.mad@gmail.com>
 ;; Keywords: vc
 ;; URL: https://github.com/muffinmad/emacs-vc-hgcmd
-;; Package-Version: 1.14
+;; Package-Version: 1.14.1
 ;; Package-Requires: ((emacs "25.1"))
 
 ;; This file is NOT part of GNU Emacs.
@@ -909,14 +909,14 @@ Insert output to process buffer and check if amount of data is enought to parse 
   (vc-hgcmd-shelve-apply (vc-hgcmd-shelve-name-at-point)))
 
 (defun vc-hgcmd-shelve-pop (name)
-  "Unshelve and keep shelve with NAME."
+  "Unshelve and remove shelve with NAME."
   (interactive (list (vc-hgcmd-shelve-read "Apply and remove shelve: ")))
   (when name
     (vc-hgcmd-command "unshelve" name)
     (vc-dir-refresh)))
 
 (defun vc-hgcmd-shelve-pop-at-point ()
-  "Unshelve and keep shelve at point."
+  "Unshelve and remove shelve at point."
   (interactive)
   (vc-hgcmd-shelve-pop (vc-hgcmd-shelve-name-at-point)))
 
